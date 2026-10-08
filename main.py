@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
 import models
@@ -39,10 +39,11 @@ def listar_lotes(db: Session = Depends(get_db)):
 
 @app.delete("/lotes/{lote_id}")
 def eliminar_lote(lote_id: int, db: Session = Depends(get_db)):
-    # Altere LoteModel para o nome real do seu modelo (ex: Lote)
-    lote = db.query(lote).filter(lote.id == lote_id).first()
-    if not lote:
+    item_lote = db.query(models.LoteReagente).filter(models.LoteReagente.id == lote_id).first()
+    
+    if not item_lote:
         raise HTTPException(status_code=404, detail="Lote não encontrado")
-    db.delete(lote)
+        
+    db.delete(item_lote)
     db.commit()
     return {"mensagem": "Lote eliminado com sucesso"}
