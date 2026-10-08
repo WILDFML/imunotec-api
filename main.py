@@ -36,3 +36,13 @@ def criar_lote(lote: schemas.LoteCreate, db: Session = Depends(get_db)):
 @app.get("/lotes/", response_model=List[schemas.LoteResponse])
 def listar_lotes(db: Session = Depends(get_db)):
     return db.query(models.LoteReagente).all()
+
+@app.delete("/lotes/{lote_id}")
+def eliminar_lote(lote_id: int, db: Session = Depends(get_db)):
+    # Altere LoteModel para o nome real do seu modelo (ex: Lote)
+    lote = db.query(lote).filter(lote.id == lote_id).first()
+    if not lote:
+        raise HTTPException(status_code=404, detail="Lote não encontrado")
+    db.delete(lote)
+    db.commit()
+    return {"mensagem": "Lote eliminado com sucesso"}

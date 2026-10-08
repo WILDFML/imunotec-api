@@ -76,6 +76,33 @@ with st.sidebar.form("form_lote"):
                 "Preencha pelo menos o nome e o número do lote."
             )
 
+# --- MENU LATERAL PARA ELIMINAR LOTES ---
+st.sidebar.markdown("---")
+st.sidebar.header("🗑️ Eliminar / Dar Baixa em Lote")
+
+with st.sidebar.form("form_eliminar"):
+    lote_id_para_apagar = st.number_input(
+        "ID do Lote a Eliminar", min_value=1, step=1, format="%d"
+    )
+    botao_apagar = st.form_submit_button("Eliminar Lote")
+
+    if botao_apagar:
+        try:
+            resposta = requests.delete(
+                f"{API_URL}/lotes/{lote_id_para_apagar}", timeout=10
+            )
+            if resposta.status_code == 200:
+                st.sidebar.success(
+                    f"Lote ID {lote_id_para_apagar} eliminado com sucesso!"
+                )
+                st.rerun()
+            else:
+                st.sidebar.error(
+                    f"Erro ao eliminar: {extrair_erro_api(resposta)}"
+                )
+        except requests.RequestException:
+            st.sidebar.error("Não foi possível ligar à API.")
+
 # --- CORPO PRINCIPAL: LISTAGEM DO STOCK ---
 st.subheader("📦 Estoque Atual de Reagentes")
 
