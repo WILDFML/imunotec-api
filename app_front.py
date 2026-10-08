@@ -16,7 +16,7 @@ st.write(
 )
 
 # URL da nossa API FastAPI a correr localmente. Permite sobrepor via variável de ambiente.
-API_URL = "https://imunotec-api-1.onrender.com/docs"
+API_URL = "https://imunotec-api-2.onrender.com"
 
 
 def extrair_erro_api(resposta):
