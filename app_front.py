@@ -1,5 +1,4 @@
 from datetime import date
-import os
 
 import pandas as pd
 import requests
@@ -15,9 +14,8 @@ st.write(
     "Painel visual para controlo de reagentes, lotes e validades em tempo real."
 )
 
-# URL da nossa API FastAPI a correr localmente. Permite sobrepor via variável de ambiente.
+# URL base da sua API no Render (sem barra no fim)
 API_URL = "https://imunotec-api-2.onrender.com"
-
 
 def extrair_erro_api(resposta):
     try:
@@ -61,7 +59,7 @@ with st.sidebar.form("form_lote"):
                 "temperatura_armazenamento": temperatura_armazenamento,
             }
             try:
-                resposta = requests.post(API_URL, json=payload, timeout=10)
+                resposta = requests.post(f"{API_URL}/lotes/", json=payload, timeout=10)
                 if resposta.status_code in (200, 201):
                     st.sidebar.success("Lote registado com sucesso!")
                     st.rerun()
@@ -71,7 +69,7 @@ with st.sidebar.form("form_lote"):
                     )
             except requests.RequestException:
                 st.sidebar.error(
-                    "Não foi possível ligar à API. O FastAPI está a correr?"
+                    "Não foi possível ligar à API. Verifique a ligação."
                 )
         else:
             st.sidebar.warning(
@@ -82,7 +80,7 @@ with st.sidebar.form("form_lote"):
 st.subheader("📦 Stock Atual de Reagentes")
 
 try:
-    response = requests.get(API_URL, timeout=10)
+    response = requests.get(f"{API_URL}/lotes/", timeout=10)
     if response.status_code == 200:
         dados = response.json()
         if dados:
