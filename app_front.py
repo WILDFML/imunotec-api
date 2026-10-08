@@ -77,7 +77,7 @@ with st.sidebar.form("form_lote"):
             )
 
 # --- CORPO PRINCIPAL: LISTAGEM DO STOCK ---
-st.subheader("📦 Stock Atual de Reagentes")
+st.subheader("📦 Estoque Atual de Reagentes")
 
 try:
     response = requests.get(f"{API_URL}/lotes/", timeout=10)
