@@ -6,10 +6,10 @@ import streamlit as st
 
 # Configuração da página
 st.set_page_config(
-    page_title="Imunotec - Gestão de Stock", page_icon="🧪", layout="wide"
+    page_title="Imunotec - Gestão de Estoque", page_icon="🧪", layout="wide"
 )
 
-st.title("🧪 Imunotec Laboratório - Gestão de Stock")
+st.title("🧪 Imunotec Laboratório - Gestão de Estoque")
 st.write(
     "Painel visual para controlo de reagentes, lotes e validades em tempo real."
 )
