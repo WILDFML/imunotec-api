@@ -11,7 +11,7 @@ st.set_page_config(
 
 st.title("🧪 Imunotec Laboratório - Gestão de Estoque")
 st.write(
-    "Painel visual para controlo de reagentes, lotes e validades em tempo real."
+    "Painel visual para controle de reagentes, lotes e validades em tempo real."
 )
 
 # URL base da sua API no Render (sem barra no fim)

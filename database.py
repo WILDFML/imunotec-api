@@ -1,16 +1,25 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# SQLite cria um arquivo local chamado 'imunotec.db' na sua pasta
-URL_BANCO = "sqlite:///./imunotec.db"
+# Usa PostgreSQL em produção se a variável de ambiente estiver disponível;
+# caso contrário, cai para SQLite local para facilitar o desenvolvimento.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(
-    URL_BANCO, connect_args={"check_same_thread": False}
-)
+if DATABASE_URL:
+    URL_BANCO = DATABASE_URL
+    engine_kwargs = {"pool_pre_ping": True}
+else:
+    URL_BANCO = "sqlite:///./imunotec.db"
+    engine_kwargs = {"connect_args": {"check_same_thread": False}}
+
+engine = create_engine(URL_BANCO, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
 
 def get_db():
     db = SessionLocal()
