@@ -47,3 +47,16 @@ def eliminar_lote(lote_id: int, db: Session = Depends(get_db)):
     db.delete(item_lote)
     db.commit()
     return {"mensagem": "Lote eliminado com sucesso"}
+
+@app.patch("/lotes/{lote_id}/adicionar")
+def adicionar_quantidade(lote_id: int, quantidade_extra: float, db: Session = Depends(get_db)):
+    item_lote = db.query(models.LoteReagente).filter(models.LoteReagente.id == lote_id).first()
+    
+    if not item_lote:
+        raise HTTPException(status_code=404, detail="Lote não encontrado")
+        
+    # Soma a quantidade nova à quantidade atual que já estava no stock
+    item_lote.quantidade_atual += quantidade_extra
+    db.commit()
+    db.refresh(item_lote)
+    return {"mensagem": "Quantidade atualizada com sucesso", "nova_quantidade": item_lote.quantidade_atual}

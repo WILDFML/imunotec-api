@@ -75,7 +75,38 @@ with st.sidebar.form("form_lote"):
             st.sidebar.warning(
                 "Preencha pelo menos o nome e o número do lote."
             )
+# --- MENU LATERAL PARA REABASTECER LOTE EXISTENTE ---
+st.sidebar.markdown("---")
+st.sidebar.header("➕ Reabastecer Lote Existente")
 
+with st.sidebar.form("form_reabastecer"):
+    lote_id_reabastecer = st.number_input(
+        "ID do Lote a Atualizar", min_value=1, step=1, format="%d", key="id_reab"
+    )
+    quantidade_adicional = st.number_input(
+        "Quantidade a Adicionar", min_value=0.1, format="%.2f", key="qtd_add"
+    )
+    botao_reabastecer = st.form_submit_button("Adicionar ao Stock")
+
+    if botao_reabastecer:
+        try:
+            # Enviamos a quantidade extra como parâmetro na query (params)
+            params = {"quantidade_extra": quantidade_adicional}
+            resposta = requests.patch(
+                f"{API_URL}/lotes/{lote_id_reabastecer}/adicionar", params=params, timeout=30
+            )
+            if resposta.status_code == 200:
+                st.sidebar.success(
+                    f"Stock atualizado com sucesso!"
+                )
+                st.rerun()
+            else:
+                st.sidebar.error(
+                    f"Erro ao reabastecer: {extrair_erro_api(resposta)}"
+                )
+        except requests.RequestException:
+            st.sidebar.error("Não foi possível ligar à API.")
+            
 # --- MENU LATERAL PARA ELIMINAR LOTES ---
 st.sidebar.markdown("---")
 st.sidebar.header("🗑️ Eliminar / Dar Baixa em Lote")
@@ -103,15 +134,24 @@ with st.sidebar.form("form_eliminar"):
         except requests.RequestException:
             st.sidebar.error("Não foi possível ligar à API.")
 
-# --- CORPO PRINCIPAL: LISTAGEM DO STOCK ---
-st.subheader("📦 Estoque Atual de Reagentes")
+# --- CORPO PRINCIPAL: LISTAGEM E PESQUISA DE STOCK ---
+st.subheader("📦 Stock Atual de Reagentes")
 
 try:
-    response = requests.get(f"{API_URL}/lotes/", timeout=10)
+    response = requests.get(f"{API_URL}/lotes/", timeout=30)
     if response.status_code == 200:
         dados = response.json()
         if dados:
             df = pd.DataFrame(dados)
+            
+            # --- BARRA DE PESQUISA RÁPIDA ---
+            pesquisa = st.text_input("🔍 Pesquisar por reagente ou fabricante...").strip()
+            if pesquisa:
+                df = df[
+                    df["nome_reagente"].str.contains(pesquisa, case=False, na=False) |
+                    df["fabricante"].str.contains(pesquisa, case=False, na=False)
+                ]
+
             # Reorganizar colunas para melhor visualização
             colunas_exibicao = {
                 "id": "ID",
@@ -124,13 +164,12 @@ try:
                 "temperatura_armazenamento": "Armazenamento",
             }
             df = df.rename(columns=colunas_exibicao)
+            
+            # Mostrar a tabela interativa
             st.dataframe(df, use_container_width=True)
         else:
             st.info("Ainda não existem reagentes registados no stock.")
     else:
         st.error(f"Erro ao carregar os dados da API: {extrair_erro_api(response)}")
 except requests.RequestException:
-    st.warning(
-        "⚠️ Certifique-se de que o servidor FastAPI está a correr (`python -m"
-        " uvicorn main:app --reload`)."
-    )
+    st.warning("⚠️ Não foi possível ligar à API para carregar o stock.")
