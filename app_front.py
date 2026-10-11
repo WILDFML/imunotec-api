@@ -27,6 +27,48 @@ def extrair_erro_api(resposta):
     return payload
 
 
+def obter_cabecalho_auth():
+    return {"Authorization": f"Bearer {st.session_state['access_token']}"}
+
+
+def validar_sessao(resposta):
+    if resposta.status_code == 401:
+        st.session_state.pop("access_token", None)
+        st.warning("A sessão expirou ou é inválida. Entre novamente.")
+        st.stop()
+
+
+if "access_token" not in st.session_state:
+    st.subheader("Iniciar sessão")
+    with st.form("form_login"):
+        email = st.text_input("E-mail")
+        password = st.text_input("Palavra-passe", type="password")
+        entrar = st.form_submit_button("Entrar")
+
+    if entrar:
+        try:
+            resposta = requests.post(
+                f"{API_URL}/token",
+                data={"username": email, "password": password},
+                timeout=10,
+            )
+            if resposta.status_code == 200:
+                st.session_state["access_token"] = resposta.json()["access_token"]
+                st.rerun()
+            else:
+                st.error(f"Não foi possível iniciar sessão: {extrair_erro_api(resposta)}")
+        except requests.RequestException:
+            st.error("Não foi possível ligar à API. Verifique a ligação.")
+
+    st.info("As contas são criadas separadamente pela API.")
+    st.stop()
+
+with st.sidebar:
+    if st.button("Terminar sessão"):
+        st.session_state.pop("access_token", None)
+        st.rerun()
+
+
 # --- MENU LATERAL PARA ADICIONAR REAGENTES ---
 st.sidebar.header("➕ Registar Novo Lote")
 
@@ -59,7 +101,13 @@ with st.sidebar.form("form_lote"):
                 "temperatura_armazenamento": temperatura_armazenamento,
             }
             try:
-                resposta = requests.post(f"{API_URL}/lotes/", json=payload, timeout=10)
+                resposta = requests.post(
+                    f"{API_URL}/lotes/",
+                    json=payload,
+                    headers=obter_cabecalho_auth(),
+                    timeout=10,
+                )
+                validar_sessao(resposta)
                 if resposta.status_code in (200, 201):
                     st.sidebar.success("Lote registado com sucesso!")
                     st.rerun()
@@ -93,8 +141,12 @@ with st.sidebar.form("form_reabastecer"):
             # Enviamos a quantidade extra como parâmetro na query (params)
             params = {"quantidade_extra": quantidade_adicional}
             resposta = requests.patch(
-                f"{API_URL}/lotes/{lote_id_reabastecer}/adicionar", params=params, timeout=30
+                f"{API_URL}/lotes/{lote_id_reabastecer}/adicionar",
+                params=params,
+                headers=obter_cabecalho_auth(),
+                timeout=30,
             )
+            validar_sessao(resposta)
             if resposta.status_code == 200:
                 st.sidebar.success(
                     f"Stock atualizado com sucesso!"
@@ -120,8 +172,11 @@ with st.sidebar.form("form_eliminar"):
     if botao_apagar:
         try:
             resposta = requests.delete(
-                f"{API_URL}/lotes/{lote_id_para_apagar}", timeout=10
+                f"{API_URL}/lotes/{lote_id_para_apagar}",
+                headers=obter_cabecalho_auth(),
+                timeout=10,
             )
+            validar_sessao(resposta)
             if resposta.status_code == 200:
                 st.sidebar.success(
                     f"Lote ID {lote_id_para_apagar} eliminado com sucesso!"
@@ -138,7 +193,12 @@ with st.sidebar.form("form_eliminar"):
 st.subheader("📦 Stock Atual de Reagentes")
 
 try:
-    response = requests.get(f"{API_URL}/lotes/", timeout=30)
+    response = requests.get(
+        f"{API_URL}/lotes/",
+        headers=obter_cabecalho_auth(),
+        timeout=30,
+    )
+    validar_sessao(response)
     if response.status_code == 200:
         dados = response.json()
         if dados:
