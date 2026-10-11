@@ -60,7 +60,7 @@ if "access_token" not in st.session_state:
         except requests.RequestException:
             st.error("Não foi possível ligar à API. Verifique a ligação.")
 
-    st.info("As contas são criadas separadamente pela API.")
+    st.info("As contas são criadas pelo administrador.")
     st.stop()
 
 with st.sidebar:

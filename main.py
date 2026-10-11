@@ -64,19 +64,6 @@ def home():
 
 # --- ROTAS DE AUTENTICAÇÃO E UTILIZADORES ---
 
-@app.post("/users/", response_model=schemas.UserResponse)
-def criar_utilizador(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Este email já está registado no sistema.")
-    
-    hashed_password = obter_hash_senha(user.password)
-    novo_utilizador = models.User(email=user.email, hashed_password=hashed_password)
-    db.add(novo_utilizador)
-    db.commit()
-    db.refresh(novo_utilizador)
-    return novo_utilizador
-
 @app.post("/token", response_model=schemas.Token)
 def login_para_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
