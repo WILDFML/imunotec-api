@@ -1,3 +1,4 @@
+import os
 from typing import List
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException, status
@@ -11,7 +12,10 @@ import models
 import schemas
 
 # Configurações de Segurança (JWT e Hashing)
-SECRET_KEY = "imunotec-chave-secreta-muito-segura-mude-depois"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("A variável de ambiente SECRET_KEY precisa ser configurada.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
