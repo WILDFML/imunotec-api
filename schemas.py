@@ -1,5 +1,5 @@
 from datetime import date
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class LoteCreate(BaseModel):
     nome_reagente: str
@@ -15,3 +15,23 @@ class LoteResponse(LoteCreate):
 
     class Config:
         from_attributes = True
+
+# --- NOVOS SCHEMAS PARA UTILIZADORES E AUTH ---
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    ativo: bool
+
+    class Config:
+        from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: str | None = None
