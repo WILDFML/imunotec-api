@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import List
 from datetime import datetime, timedelta
@@ -7,9 +8,18 @@ from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 
-from database import engine, Base, get_db
+from database import (
+    AuthBase,
+    StockBase,
+    auth_engine,
+    get_auth_db,
+    get_stock_db,
+    stock_engine,
+)
 import models
 import schemas
+
+logger = logging.getLogger(__name__)
 
 # Configurações de Segurança (JWT e Hashing)
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -22,8 +32,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Cria o banco e as tabelas automaticamente
-Base.metadata.create_all(bind=engine)
+# Cria as tabelas em cada banco e falha na inicialização se uma conexão não funcionar.
+AuthBase.metadata.create_all(bind=auth_engine)
+logger.info("Conexão com o banco de autenticação estabelecida.")
+StockBase.metadata.create_all(bind=stock_engine)
+logger.info("Conexão com o banco de estoque estabelecida.")
 
 app = FastAPI(
     title="Imunotec Estoque SaaS",
@@ -38,7 +51,10 @@ def verificar_senha(senha_pura, senha_hash):
 def obter_hash_senha(senha):
     return pwd_context.hash(senha)
 
-def obter_utilizador_atual(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def obter_utilizador_atual(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_auth_db),
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Não foi possível validar as credenciais",
@@ -65,7 +81,10 @@ def home():
 # --- ROTAS DE AUTENTICAÇÃO E UTILIZADORES ---
 
 @app.post("/token", response_model=schemas.Token)
-def login_para_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_para_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_auth_db),
+):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not verificar_senha(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -84,7 +103,11 @@ def login_para_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
 # --- ROTAS DE LOTES E REAGENTES (CRUD) ---
 
 @app.post("/lotes/", response_model=schemas.LoteResponse)
-def criar_lote(lote: schemas.LoteCreate, db: Session = Depends(get_db), current_user: models.User = Depends(obter_utilizador_atual)):
+def criar_lote(
+    lote: schemas.LoteCreate,
+    db: Session = Depends(get_stock_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
     db_lote = db.query(models.LoteReagente).filter(models.LoteReagente.numero_lote == lote.numero_lote).first()
     if db_lote:
         raise HTTPException(status_code=400, detail="Este número de lote já está cadastrado.")
@@ -96,11 +119,18 @@ def criar_lote(lote: schemas.LoteCreate, db: Session = Depends(get_db), current_
     return novo_lote
 
 @app.get("/lotes/", response_model=List[schemas.LoteResponse])
-def listar_lotes(db: Session = Depends(get_db), current_user: models.User = Depends(obter_utilizador_atual)):
+def listar_lotes(
+    db: Session = Depends(get_stock_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
     return db.query(models.LoteReagente).all()
 
 @app.delete("/lotes/{lote_id}")
-def eliminar_lote(lote_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(obter_utilizador_atual)):
+def eliminar_lote(
+    lote_id: int,
+    db: Session = Depends(get_stock_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
     item_lote = db.query(models.LoteReagente).filter(models.LoteReagente.id == lote_id).first()
     
     if not item_lote:
@@ -111,7 +141,12 @@ def eliminar_lote(lote_id: int, db: Session = Depends(get_db), current_user: mod
     return {"mensagem": "Lote eliminado com sucesso"}
 
 @app.patch("/lotes/{lote_id}/adicionar")
-def adicionar_quantidade(lote_id: int, quantidade_extra: float, db: Session = Depends(get_db), current_user: models.User = Depends(obter_utilizador_atual)):
+def adicionar_quantidade(
+    lote_id: int,
+    quantidade_extra: float,
+    db: Session = Depends(get_stock_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
     item_lote = db.query(models.LoteReagente).filter(models.LoteReagente.id == lote_id).first()
     
     if not item_lote:

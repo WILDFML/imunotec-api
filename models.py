@@ -1,7 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, Date, Boolean
-from database import Base
+from database import AuthBase, StockBase
 
-class LoteReagente(Base):
+
+class LoteReagente(StockBase):
     __tablename__ = "lotes_reagentes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -13,7 +14,7 @@ class LoteReagente(Base):
     data_validade = Column(Date, nullable=False)
     temperatura_armazenamento = Column(String(50)) # ex: 2°C a 8°C, -20°C
 
-class User(Base):
+class User(AuthBase):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
