@@ -5,6 +5,7 @@ uvicorn
 sqlalchemy
 psycopg[binary]
 pydantic
+email-validator
 streamlit
 pandas
 requests
