@@ -77,11 +77,22 @@ def carregar_reunioes(repository, token):
         )
         conteudo_resposta.raise_for_status()
         payload = conteudo_resposta.json()
-        try:
-            html = base64.b64decode(payload["content"], validate=True).decode("utf-8")
-        except (KeyError, UnicodeDecodeError, ValueError) as erro:
+        conteudo_codificado = payload.get("content")
+        if payload.get("encoding") != "base64" or not isinstance(
+            conteudo_codificado, str
+        ):
             raise ValueError(
-                f"Não foi possível ler o arquivo {arquivo['name']}."
+                f"O GitHub não retornou o conteúdo Base64 esperado para "
+                f"{arquivo['name']}."
+            )
+        try:
+            conteudo_codificado = "".join(conteudo_codificado.split())
+            html = base64.b64decode(conteudo_codificado, validate=True).decode(
+                "utf-8"
+            )
+        except (UnicodeDecodeError, ValueError) as erro:
+            raise ValueError(
+                f"Não foi possível decodificar o arquivo {arquivo['name']}."
             ) from erro
         reunioes.append((arquivo["name"], html))
     return reunioes
