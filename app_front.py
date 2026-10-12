@@ -1,7 +1,11 @@
 import base64
+import mimetypes
 import os
+import posixpath
+import re
 from pathlib import Path
 from datetime import date
+from urllib.parse import quote, unquote, urlsplit
 
 import pandas as pd
 import requests
@@ -53,6 +57,51 @@ def configuracao_caderno():
     }
 
 
+def incorporar_imagens(html, repository, headers):
+    padrao_imagem = re.compile(
+        r'(<img\b[^>]*?\bsrc\s*=\s*)(["\'])(.*?)\2',
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    def incorporar(match):
+        origem = match.group(3)
+        url = urlsplit(origem)
+        if url.scheme or url.netloc or url.path.startswith("/"):
+            return match.group(0)
+
+        caminho_imagem = posixpath.normpath(
+            posixpath.join("atas", unquote(url.path))
+        )
+        if not caminho_imagem.startswith("atas/"):
+            raise ValueError(f"Caminho de imagem inválido na ata: {origem}")
+
+        tipo_mime, _ = mimetypes.guess_type(caminho_imagem)
+        if not tipo_mime or not tipo_mime.startswith("image/"):
+            raise ValueError(f"Formato de imagem não reconhecido: {origem}")
+
+        url_api = (
+            f"https://api.github.com/repos/{repository}/contents/"
+            f"{quote(caminho_imagem, safe='/')}"
+        )
+        resposta = requests.get(
+            url_api,
+            headers={
+                **headers,
+                "Accept": "application/vnd.github.raw+json",
+            },
+            timeout=20,
+        )
+        resposta.raise_for_status()
+        imagem_codificada = base64.b64encode(resposta.content).decode("ascii")
+        origem_embutida = f"data:{tipo_mime};base64,{imagem_codificada}"
+        return (
+            f"{match.group(1)}{match.group(2)}{origem_embutida}"
+            f"{match.group(2)}"
+        )
+
+    return padrao_imagem.sub(incorporar, html)
+
+
 def carregar_reunioes(repository, token):
     headers = {
         "Accept": "application/vnd.github+json",
@@ -94,6 +143,7 @@ def carregar_reunioes(repository, token):
             raise ValueError(
                 f"Não foi possível decodificar o arquivo {arquivo['name']}."
             ) from erro
+        html = incorporar_imagens(html, repository, headers)
         reunioes.append((arquivo["name"], html))
     return reunioes
 
