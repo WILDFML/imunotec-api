@@ -293,6 +293,9 @@ with st.sidebar:
         st.session_state.pop("access_token", None)
         st.rerun()
 
+    def selecionar_secao(secao):
+        st.session_state["secao"] = secao
+
     secao = st.radio(
         "Navegação",
         ["Início", "Caderno de reuniões", "Estoque"],
@@ -310,16 +313,22 @@ if secao == "Início":
         with st.container(border=True):
             st.subheader("📦 Estoque")
             st.write("Consulte reagentes, lotes, quantidades e validades.")
-            if st.button("Abrir estoque", use_container_width=True):
-                st.session_state["secao"] = "Estoque"
-                st.rerun()
+            st.button(
+                "Abrir estoque",
+                on_click=selecionar_secao,
+                args=("Estoque",),
+                use_container_width=True,
+            )
     with reunioes_col:
         with st.container(border=True):
             st.subheader("📝 Caderno de reuniões")
             st.write("Acesse atas e registros internos publicados em Quarto.")
-            if st.button("Abrir caderno", use_container_width=True):
-                st.session_state["secao"] = "Caderno de reuniões"
-                st.rerun()
+            st.button(
+                "Abrir caderno",
+                on_click=selecionar_secao,
+                args=("Caderno de reuniões",),
+                use_container_width=True,
+            )
     st.stop()
 
 if secao == "Caderno de reuniões":
