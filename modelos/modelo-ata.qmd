@@ -1,0 +1,43 @@
+---
+title: "Reunião do laboratório"
+subtitle: "Registro interno"
+date: 2026-01-01
+lang: pt-BR
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  enabled: false
+---
+
+> Substitua os campos de exemplo antes de publicar. Este modelo é genérico;
+> mantenha atas reais apenas no repositório privado de reuniões.
+
+## Identificação
+
+- **Data e horário:** preencher
+- **Participantes:** preencher
+- **Local ou formato:** preencher
+
+## Pauta
+
+- Preencher
+
+## Discussões
+
+Registrar os principais pontos discutidos.
+
+## Decisões
+
+- Preencher
+
+## Ações e próximos passos
+
+| Ação | Responsável | Prazo |
+|---|---|---|
+| Preencher | Preencher | Preencher |
+
+## Próxima reunião
+
+Preencher, se definida.
