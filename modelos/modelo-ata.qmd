@@ -11,8 +11,7 @@ execute:
   enabled: false
 ---
 
-> Substitua os campos de exemplo antes de publicar. Este modelo é genérico;
-> mantenha atas reais apenas no repositório privado de reuniões.
+> Substitua os campos de exemplo antes de publicar. Este modelo é genérico; mantenha atas reais apenas no repositório privado de reuniões.
 
 ## Identificação
 
@@ -34,9 +33,9 @@ Registrar os principais pontos discutidos.
 
 ## Ações e próximos passos
 
-| Ação | Responsável | Prazo |
-|---|---|---|
-| Preencher | Preencher | Preencher |
+| Ação      | Responsável | Prazo     |
+|-----------|-------------|-----------|
+| Preencher | Preencher   | Preencher |
 
 ## Próxima reunião
 
