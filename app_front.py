@@ -39,28 +39,60 @@ def validar_sessao(resposta):
 
 
 if "access_token" not in st.session_state:
-    st.subheader("Iniciar sessão")
-    with st.form("form_login"):
-        email = st.text_input("E-mail")
-        password = st.text_input("Palavra-passe", type="password")
-        entrar = st.form_submit_button("Entrar")
+    acao = st.radio("Acesso", ["Iniciar sessão", "Criar conta"], horizontal=True)
+    if acao == "Iniciar sessão":
+        st.subheader("Iniciar sessão")
+        with st.form("form_login"):
+            email = st.text_input("E-mail")
+            password = st.text_input("Palavra-passe", type="password")
+            entrar = st.form_submit_button("Entrar")
 
-    if entrar:
-        try:
-            resposta = requests.post(
-                f"{API_URL}/token",
-                data={"username": email, "password": password},
-                timeout=60,
+        if entrar:
+            try:
+                resposta = requests.post(
+                    f"{API_URL}/token",
+                    data={"username": email, "password": password},
+                    timeout=60,
+                )
+                if resposta.status_code == 200:
+                    st.session_state["access_token"] = resposta.json()["access_token"]
+                    st.rerun()
+                else:
+                    st.error(
+                        f"Não foi possível iniciar sessão: {extrair_erro_api(resposta)}"
+                    )
+            except requests.RequestException:
+                st.error("Não foi possível ligar à API. Verifique a ligação.")
+    else:
+        st.subheader("Criar conta")
+        with st.form("form_registo"):
+            email = st.text_input("E-mail")
+            password = st.text_input(
+                "Palavra-passe (mínimo 8 caracteres)", type="password"
             )
-            if resposta.status_code == 200:
-                st.session_state["access_token"] = resposta.json()["access_token"]
-                st.rerun()
-            else:
-                st.error(f"Não foi possível iniciar sessão: {extrair_erro_api(resposta)}")
-        except requests.RequestException:
-            st.error("Não foi possível ligar à API. Verifique a ligação.")
+            registration_key = st.text_input(
+                "Chave de criação fornecida pelo administrador",
+                type="password",
+            )
+            criar_conta = st.form_submit_button("Criar conta")
 
-    st.info("As contas são criadas pelo administrador.")
+        if criar_conta:
+            try:
+                resposta = requests.post(
+                    f"{API_URL}/register",
+                    json={"email": email, "password": password},
+                    headers={"X-Registration-Key": registration_key},
+                    timeout=60,
+                )
+                if resposta.status_code == 201:
+                    st.success("Conta criada. Agora pode iniciar sessão.")
+                else:
+                    st.error(
+                        f"Não foi possível criar a conta: {extrair_erro_api(resposta)}"
+                    )
+            except requests.RequestException:
+                st.error("Não foi possível ligar à API. Verifique a ligação.")
+
     st.stop()
 
 with st.sidebar:

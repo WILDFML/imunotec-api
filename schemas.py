@@ -1,5 +1,5 @@
 from datetime import date
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class LoteCreate(BaseModel):
     nome_reagente: str
@@ -19,7 +19,7 @@ class LoteResponse(LoteCreate):
 # --- NOVOS SCHEMAS PARA UTILIZADORES E AUTH ---
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
 
 class UserResponse(BaseModel):
     id: int

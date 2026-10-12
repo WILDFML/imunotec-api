@@ -1,9 +1,12 @@
+import hmac
 import logging
 import os
 from typing import List
 from datetime import datetime, timedelta
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -28,6 +31,7 @@ if not SECRET_KEY:
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+ACCOUNT_CREATION_KEY = os.getenv("ACCOUNT_CREATION_KEY")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -80,12 +84,61 @@ def home():
 
 # --- ROTAS DE AUTENTICAÇÃO E UTILIZADORES ---
 
+@app.post(
+    "/register",
+    response_model=schemas.UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def registar_utilizador(
+    user_data: schemas.UserCreate,
+    x_registration_key: str | None = Header(default=None),
+    db: Session = Depends(get_auth_db),
+):
+    if not ACCOUNT_CREATION_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="A criação de contas não está configurada.",
+        )
+    if x_registration_key is None or not hmac.compare_digest(
+        x_registration_key.encode("utf-8"),
+        ACCOUNT_CREATION_KEY.encode("utf-8"),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chave de criação inválida.",
+        )
+
+    email = str(user_data.email).strip().lower()
+    if db.query(models.User).filter(models.User.email == email).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Já existe uma conta com este e-mail.",
+        )
+
+    user = models.User(
+        email=email,
+        hashed_password=obter_hash_senha(user_data.password),
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Já existe uma conta com este e-mail.",
+        )
+    db.refresh(user)
+    return user
+
+
 @app.post("/token", response_model=schemas.Token)
 def login_para_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_auth_db),
 ):
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    email = form_data.username.strip().lower()
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
     if not user or not verificar_senha(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
