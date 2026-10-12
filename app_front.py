@@ -297,10 +297,63 @@ if secao == "Caderno de reuniões":
     if not reunioes:
         st.info("Ainda não há reuniões publicadas no caderno.")
     else:
+        reunioes_formatadas = []
         for nome_arquivo, html in reunioes:
-            titulo = Path(nome_arquivo).stem.replace("-", " ").replace("_", " ").title()
-            with st.expander(titulo, expanded=len(reunioes) == 1):
-                st.html(html)
+            nome = Path(nome_arquivo).stem
+            data_reuniao = None
+            try:
+                data_reuniao = date.fromisoformat(nome[:10])
+            except ValueError:
+                pass
+
+            titulo = nome[11:] if data_reuniao else nome
+            titulo = titulo.replace("-", " ").replace("_", " ").title()
+            reunioes_formatadas.append(
+                (nome_arquivo, html, titulo, data_reuniao)
+            )
+
+        reuniao_aberta = st.session_state.get("reuniao_aberta")
+        reuniao_selecionada = next(
+            (
+                reuniao
+                for reuniao in reunioes_formatadas
+                if reuniao[0] == reuniao_aberta
+            ),
+            None,
+        )
+        if reuniao_selecionada:
+            if st.button("← Voltar às reuniões"):
+                st.session_state.pop("reuniao_aberta", None)
+                st.rerun()
+            _, html, titulo, data_reuniao = reuniao_selecionada
+            st.subheader(titulo)
+            if data_reuniao:
+                st.caption(data_reuniao.strftime("%d/%m/%Y"))
+            st.html(html)
+        else:
+            st.session_state.pop("reuniao_aberta", None)
+            for inicio in range(0, len(reunioes_formatadas), 2):
+                colunas = st.columns(2)
+                for coluna, reuniao in zip(
+                    colunas, reunioes_formatadas[inicio : inicio + 2]
+                ):
+                    nome_arquivo, _, titulo, data_reuniao = reuniao
+                    with coluna:
+                        with st.container(border=True):
+                            st.caption(
+                                data_reuniao.strftime("%d/%m/%Y")
+                                if data_reuniao
+                                else "Registro do laboratório"
+                            )
+                            st.subheader(titulo)
+                            st.write("Registro da reunião em formato Quarto.")
+                            if st.button(
+                                "Ler ata",
+                                key=f"abrir_reuniao_{nome_arquivo}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["reuniao_aberta"] = nome_arquivo
+                                st.rerun()
     st.stop()
 
 st.title("📦 Gestão de estoque")
