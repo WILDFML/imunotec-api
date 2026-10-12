@@ -157,7 +157,7 @@ if "access_token" not in st.session_state:
         st.markdown(
             """
             <section class="login-panel">
-                <p>Gestão de recursos cuidar das atividades do laboratório.</p>
+                <p>Gestão de recursos para cuidar das atividades do laboratório com eficiência.</p>
                 <div class="login-note">Reagentes, lotes e validades em um só lugar.</div>
             </section>
             """,
