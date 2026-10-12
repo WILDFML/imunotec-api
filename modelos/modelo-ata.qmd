@@ -33,9 +33,9 @@ Registrar os principais pontos discutidos.
 
 ## Ações e próximos passos
 
-| Ação      | Responsável | Prazo     |
-|-----------|-------------|-----------|
-| Preencher | Preencher   | Preencher |
+| Ação                                 | Responsável | Prazo        |
+|--------------------------------------|-------------|--------------|
+| Buscar fichas de segurança reagentes | Lilian Hass | Janeiro-2025 |
 
 ## Próxima reunião
 
