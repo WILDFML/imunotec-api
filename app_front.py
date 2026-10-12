@@ -431,7 +431,12 @@ with st.sidebar.form("form_lote"):
     unidade_medida = st.selectbox(
         "Unidade de Medida", ["mL", "g", "L", "Unidades", "Frascos"]
     )
-    data_validade = st.date_input("Data de Validade", value=date.today())
+    data_validade = st.date_input(
+        "Data de Validade",
+        value=date.today(),
+        min_value=date(1900, 1, 1),
+        max_value=date(2100, 12, 31),
+    )
     temperatura_armazenamento = st.selectbox(
         "Temperatura", ["2°C a 8°C", "-20°C", "Temperatura Ambiente", "-80°C"]
     )
