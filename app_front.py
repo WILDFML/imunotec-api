@@ -50,7 +50,7 @@ if "access_token" not in st.session_state:
             resposta = requests.post(
                 f"{API_URL}/token",
                 data={"username": email, "password": password},
-                timeout=10,
+                timeout=60,
             )
             if resposta.status_code == 200:
                 st.session_state["access_token"] = resposta.json()["access_token"]
