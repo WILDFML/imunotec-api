@@ -41,6 +41,16 @@ def validar_sessao(resposta):
         st.stop()
 
 
+def buscar_lotes():
+    resposta = requests.get(
+        f"{API_URL}/lotes/",
+        headers=obter_cabecalho_auth(),
+        timeout=30,
+    )
+    validar_sessao(resposta)
+    return resposta
+
+
 def configuracao_caderno():
     def obter_segredo(nome):
         valor = os.getenv(nome)
@@ -308,6 +318,144 @@ if secao == "Início":
         "Um espaço compartilhado para organizar recursos, registrar reuniões "
         "e apoiar as atividades do laboratório."
     )
+
+    st.subheader("Visão geral do estoque")
+    try:
+        resposta_lotes = buscar_lotes()
+    except requests.RequestException:
+        st.error("Não foi possível ligar à API para carregar o dashboard.")
+        st.stop()
+
+    if resposta_lotes.status_code != 200:
+        st.error(
+            f"Erro ao carregar o estoque: {extrair_erro_api(resposta_lotes)}"
+        )
+        st.stop()
+
+    dados_lotes = resposta_lotes.json()
+    if dados_lotes:
+        df_dashboard = pd.DataFrame(dados_lotes)
+        df_dashboard["data_validade"] = pd.to_datetime(
+            df_dashboard["data_validade"], errors="coerce"
+        )
+        hoje = pd.Timestamp(date.today())
+        limite_validade = hoje + pd.Timedelta(days=30)
+        vencidos = df_dashboard["data_validade"] < hoje
+        vencimento_proximo = df_dashboard["data_validade"].between(
+            hoje, limite_validade
+        )
+        sem_estoque = pd.to_numeric(
+            df_dashboard["quantidade_atual"], errors="coerce"
+        ).fillna(0) <= 0
+        df_dashboard["Status"] = "Em dia"
+        df_dashboard.loc[vencimento_proximo, "Status"] = "Vence em até 30 dias"
+        df_dashboard.loc[vencidos, "Status"] = "Vencido"
+        df_dashboard["Disponibilidade"] = "Com estoque"
+        df_dashboard.loc[sem_estoque, "Disponibilidade"] = "Sem estoque"
+
+        total_lotes = len(df_dashboard)
+        total_reagentes = df_dashboard["nome_reagente"].nunique()
+        total_vencidos = int(vencidos.sum())
+        total_vencimento_proximo = int(vencimento_proximo.sum())
+        total_sem_estoque = int(sem_estoque.sum())
+    else:
+        df_dashboard = pd.DataFrame(
+            columns=[
+                "id",
+                "nome_reagente",
+                "numero_lote",
+                "fabricante",
+                "quantidade_atual",
+                "unidade_medida",
+                "data_validade",
+                "temperatura_armazenamento",
+                "Status",
+                "Disponibilidade",
+            ]
+        )
+        total_lotes = total_reagentes = total_vencidos = 0
+        total_vencimento_proximo = total_sem_estoque = 0
+
+    indicadores = st.columns(5)
+    indicadores[0].metric("Lotes cadastrados", total_lotes)
+    indicadores[1].metric("Reagentes", total_reagentes)
+    indicadores[2].metric("Vencidos", total_vencidos)
+    indicadores[3].metric("Vencem em até 30 dias", total_vencimento_proximo)
+    indicadores[4].metric("Sem estoque", total_sem_estoque)
+
+    if df_dashboard.empty:
+        st.info("Ainda não existem reagentes registados no stock.")
+    else:
+        st.markdown("#### Itens do laboratório")
+        filtros = st.columns([2, 1])
+        pesquisa_dashboard = filtros[0].text_input(
+            "Pesquisar por reagente, lote ou fabricante",
+            key="pesquisa_dashboard",
+        ).strip()
+        status_dashboard = filtros[1].selectbox(
+            "Filtrar por validade",
+            [
+                "Todos",
+                "Vencido",
+                "Vence em até 30 dias",
+                "Em dia",
+            ],
+            key="status_dashboard",
+        )
+
+        df_exibicao = df_dashboard.copy()
+        if pesquisa_dashboard:
+            corresponde_pesquisa = pd.Series(
+                False, index=df_exibicao.index
+            )
+            for coluna in ["nome_reagente", "numero_lote", "fabricante"]:
+                corresponde_pesquisa |= df_exibicao[coluna].str.contains(
+                    pesquisa_dashboard, case=False, na=False
+                )
+            df_exibicao = df_exibicao[corresponde_pesquisa]
+
+        if status_dashboard != "Todos":
+            df_exibicao = df_exibicao[
+                df_exibicao["Status"] == status_dashboard
+            ]
+
+        df_exibicao = df_exibicao.sort_values(
+            "data_validade", na_position="first"
+        )
+        df_exibicao["data_validade"] = df_exibicao[
+            "data_validade"
+        ].dt.strftime("%d/%m/%Y")
+        df_exibicao = df_exibicao.rename(
+            columns={
+                "nome_reagente": "Reagente",
+                "numero_lote": "Lote",
+                "fabricante": "Fabricante",
+                "quantidade_atual": "Quantidade",
+                "unidade_medida": "Unidade",
+                "data_validade": "Validade",
+                "temperatura_armazenamento": "Armazenamento",
+            }
+        )
+        colunas_dashboard = [
+            "Reagente",
+            "Lote",
+            "Fabricante",
+            "Quantidade",
+            "Unidade",
+            "Validade",
+            "Armazenamento",
+            "Status",
+            "Disponibilidade",
+        ]
+        if df_exibicao.empty:
+            st.info("Nenhum item corresponde aos filtros selecionados.")
+        else:
+            st.dataframe(
+                df_exibicao[colunas_dashboard],
+                use_container_width=True,
+                hide_index=True,
+            )
+
     estoque_col, reunioes_col = st.columns(2)
     with estoque_col:
         with st.container(border=True):
@@ -547,12 +695,7 @@ with st.sidebar.form("form_eliminar"):
 st.subheader("📦 Stock Atual de Reagentes")
 
 try:
-    response = requests.get(
-        f"{API_URL}/lotes/",
-        headers=obter_cabecalho_auth(),
-        timeout=30,
-    )
-    validar_sessao(response)
+    response = buscar_lotes()
     if response.status_code == 200:
         dados = response.json()
         if dados:
