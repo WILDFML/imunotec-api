@@ -5,12 +5,14 @@ lang: pt-BR
 categoria: "Categoria"
 tags:
   - "palavra-chave"
-versao: "1.0"
+versao: "1.1"
 responsavel_revisao: "Nome do responsável"
 data_revisao: ""
 proxima_revisao: ""
 reagentes:
-  - "Nome do reagente como aparece no estoque"
+  - "GLICERINA"
+  - "Polissorbato"
+
 format:
   html:
     toc: true
@@ -45,8 +47,8 @@ Descreva quem executa, supervisiona e revisa o procedimento.
 
 ## 5. Materiais e equipamentos
 
-GLICERINA
-Polissorbato
+-GLICERINA
+-Polissorbato
 
 ## 6. Segurança e cuidados
 
