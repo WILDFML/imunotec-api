@@ -1,0 +1,73 @@
+---
+title: "Nome do procedimento"
+subtitle: "Procedimento operacional padrão"
+date: 2026-01-01
+lang: pt-BR
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  enabled: false
+---
+
+> Preencha e revise este documento conforme as práticas aprovadas pelo
+> laboratório antes de publicar. Este modelo não substitui validação técnica,
+> treinamento ou os procedimentos de biossegurança institucionais.
+
+## Controle do documento
+
+- **Código:** preencher
+- **Versão:** preencher
+- **Responsável pela revisão:** preencher
+- **Data de vigência:** preencher
+
+## Objetivo
+
+Descreva o objetivo e o resultado esperado deste procedimento.
+
+## Escopo
+
+Indique as atividades, os equipamentos e as pessoas aos quais este
+procedimento se aplica.
+
+## Responsabilidades
+
+Descreva as responsabilidades de quem executa, supervisiona e revisa o
+procedimento.
+
+## Materiais e equipamentos
+
+Liste os materiais, equipamentos, reagentes e documentos necessários. Inclua
+as especificações relevantes e links para as fichas de segurança quando
+aplicável.
+
+## Segurança e cuidados
+
+Registre os riscos identificados, os equipamentos de proteção, as medidas de
+prevenção, o descarte e as ações a tomar em caso de incidente. Consulte as
+orientações institucionais aplicáveis.
+
+## Procedimento
+
+Descreva as etapas na ordem de execução, incluindo os critérios de aceitação e
+os pontos de controle necessários.
+
+1. Preencher a primeira etapa.
+2. Preencher a próxima etapa.
+
+## Registros
+
+Indique quais dados devem ser registrados, onde ficam armazenados e por quanto
+tempo devem ser mantidos.
+
+## Referências
+
+Liste normas, manuais, artigos, fichas de segurança e documentos institucionais
+utilizados na elaboração deste procedimento.
+
+## Histórico de revisões
+
+| Versão | Data       | Descrição da alteração | Responsável |
+|--------|------------|------------------------|-------------|
+| 1.0    | 2026-01-01 | Emissão inicial        | preencher   |

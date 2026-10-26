@@ -51,16 +51,6 @@ def buscar_lotes():
     return resposta
 
 
-def buscar_procedimentos():
-    resposta = requests.get(
-        f"{API_URL}/procedimentos/",
-        headers=obter_cabecalho_auth(),
-        timeout=30,
-    )
-    validar_sessao(resposta)
-    return resposta
-
-
 def configuracao_caderno():
     def obter_segredo(nome):
         valor = os.getenv(nome)
@@ -77,7 +67,7 @@ def configuracao_caderno():
     }
 
 
-def incorporar_imagens(html, repository, headers):
+def incorporar_imagens(html, repository, headers, diretorio):
     padrao_imagem = re.compile(
         r'(<img\b[^>]*?\bsrc\s*=\s*)(["\'])(.*?)\2',
         flags=re.IGNORECASE | re.DOTALL,
@@ -90,10 +80,12 @@ def incorporar_imagens(html, repository, headers):
             return match.group(0)
 
         caminho_imagem = posixpath.normpath(
-            posixpath.join("atas", unquote(url.path))
+            posixpath.join(diretorio, unquote(url.path))
         )
-        if not caminho_imagem.startswith("atas/"):
-            raise ValueError(f"Caminho de imagem inválido na ata: {origem}")
+        if not caminho_imagem.startswith(f"{diretorio}/"):
+            raise ValueError(
+                f"Caminho de imagem inválido no documento: {origem}"
+            )
 
         tipo_mime, _ = mimetypes.guess_type(caminho_imagem)
         if not tipo_mime or not tipo_mime.startswith("image/"):
@@ -122,13 +114,24 @@ def incorporar_imagens(html, repository, headers):
     return padrao_imagem.sub(incorporar, html)
 
 
-def carregar_reunioes(repository, token):
+def carregar_documentos_quarto(repository, token, diretorio):
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    api_url = f"https://api.github.com/repos/{repository}/contents/atas"
+    diretorio = posixpath.normpath(diretorio)
+    if (
+        diretorio in (".", "..")
+        or diretorio.startswith(("../", "/"))
+        or "\\" in diretorio
+    ):
+        raise ValueError("Diretório de documentos inválido.")
+
+    api_url = (
+        f"https://api.github.com/repos/{repository}/contents/"
+        f"{quote(diretorio, safe='/')}"
+    )
     resposta = requests.get(api_url, headers=headers, timeout=20)
     resposta.raise_for_status()
 
@@ -139,7 +142,7 @@ def carregar_reunioes(repository, token):
         and item.get("name", "").lower().endswith(".html")
         and not item.get("name", "").startswith("_")
     ]
-    reunioes = []
+    documentos = []
     for arquivo in sorted(arquivos, key=lambda item: item["name"], reverse=True):
         conteudo_resposta = requests.get(
             arquivo["url"], headers=headers, timeout=20
@@ -163,9 +166,9 @@ def carregar_reunioes(repository, token):
             raise ValueError(
                 f"Não foi possível decodificar o arquivo {arquivo['name']}."
             ) from erro
-        html = incorporar_imagens(html, repository, headers)
-        reunioes.append((arquivo["name"], html))
-    return reunioes
+        html = incorporar_imagens(html, repository, headers, diretorio)
+        documentos.append((arquivo["name"], html))
+    return documentos
 
 
 st.markdown(
@@ -672,7 +675,7 @@ if secao == "Início":
     with procedimentos_col:
         with st.container(border=True):
             st.subheader("🧬 Procedimentos")
-            st.write("Consulte e mantenha os protocolos do laboratório.")
+            st.write("Leia os protocolos publicados pela equipe em Quarto.")
             st.button(
                 "Abrir procedimentos",
                 on_click=selecionar_secao,
@@ -683,304 +686,96 @@ if secao == "Início":
 
 if secao == "Procedimentos":
     st.title("🧬 Procedimentos do laboratório")
-    st.caption(
-        "Uma biblioteca compartilhada para documentar e consultar os "
-        "protocolos da equipe."
-    )
-
-    if mensagem := st.session_state.pop("mensagem_procedimentos", None):
-        st.success(mensagem)
+    st.caption("Protocolos do laboratório, escritos e publicados em Quarto.")
+    configuracao = configuracao_caderno()
+    if not configuracao["repository"] or not configuracao["token"]:
+        st.info(
+            "A biblioteca ainda não está conectada. O administrador precisa "
+            "configurar o repositório privado e o token de leitura do GitHub."
+        )
+        st.stop()
 
     try:
-        resposta_procedimentos = buscar_procedimentos()
-    except requests.RequestException:
-        st.error("Não foi possível ligar à API para carregar os procedimentos.")
-        st.stop()
-
-    if resposta_procedimentos.status_code != 200:
+        documentos = carregar_documentos_quarto(
+            configuracao["repository"],
+            configuracao["token"],
+            "procedimentos",
+        )
+    except requests.RequestException as erro:
         st.error(
-            "Não foi possível carregar os procedimentos: "
-            f"{extrair_erro_api(resposta_procedimentos)}"
+            f"Não foi possível carregar os procedimentos do GitHub: {erro}"
         )
         st.stop()
+    except ValueError as erro:
+        st.error(str(erro))
+        st.stop()
 
-    procedimentos = resposta_procedimentos.json()
-    procedimentos_por_id = {
-        procedimento["id"]: procedimento for procedimento in procedimentos
-    }
-
-    topo_coluna, botao_coluna = st.columns([5, 1])
-    with topo_coluna:
-        st.subheader(f"{len(procedimentos)} procedimento(s) na biblioteca")
-    with botao_coluna:
-        if st.button(
-            "＋ Novo",
-            type="primary",
-            use_container_width=True,
-            key="novo_procedimento",
-        ):
-            st.session_state["procedimento_modo"] = "novo"
-            st.session_state.pop("procedimento_selecionado", None)
-            st.rerun()
-
-    modo_procedimento = st.session_state.get("procedimento_modo")
-    procedimento_em_edicao = None
-    if modo_procedimento == "editar":
-        procedimento_em_edicao = procedimentos_por_id.get(
-            st.session_state.get("procedimento_selecionado")
-        )
-        if procedimento_em_edicao is None:
-            st.session_state.pop("procedimento_modo", None)
-            st.session_state.pop("procedimento_selecionado", None)
-            st.rerun()
-
-    if modo_procedimento in ("novo", "editar"):
-        st.markdown(
-            "#### Editar procedimento"
-            if modo_procedimento == "editar"
-            else "#### Novo procedimento"
-        )
-        identificador_formulario = (
-            procedimento_em_edicao["id"]
-            if procedimento_em_edicao
-            else "novo"
-        )
-        with st.form(f"form_procedimento_{identificador_formulario}"):
-            titulo_procedimento = st.text_input(
-                "Nome do procedimento",
-                value=procedimento_em_edicao["titulo"]
-                if procedimento_em_edicao
-                else "",
-                max_chars=150,
-            )
-            categoria_procedimento = st.text_input(
-                "Categoria",
-                value=procedimento_em_edicao["categoria"]
-                if procedimento_em_edicao
-                else "",
-                placeholder="Ex.: Biossegurança, PCR, preparo de soluções",
-                max_chars=80,
-            )
-            objetivo_procedimento = st.text_area(
-                "Objetivo",
-                value=procedimento_em_edicao["objetivo"]
-                if procedimento_em_edicao
-                else "",
-                height=100,
-                max_chars=10000,
-            )
-            materiais_procedimento = st.text_area(
-                "Materiais e equipamentos",
-                value=procedimento_em_edicao["materiais"]
-                if procedimento_em_edicao
-                else "",
-                height=100,
-                max_chars=10000,
-            )
-            passos_procedimento = st.text_area(
-                "Passo a passo",
-                value=procedimento_em_edicao["passos"]
-                if procedimento_em_edicao
-                else "",
-                height=220,
-                max_chars=30000,
-                help="Descreva cada etapa em uma linha para facilitar a consulta.",
-            )
-            seguranca_procedimento = st.text_area(
-                "Segurança e cuidados",
-                value=procedimento_em_edicao["seguranca"]
-                if procedimento_em_edicao
-                else "",
-                height=100,
-                max_chars=10000,
-            )
-            salvar_procedimento = st.form_submit_button(
-                "Salvar procedimento",
-                type="primary",
-                use_container_width=True,
-            )
-
-        cancelar_coluna, _ = st.columns([1, 5])
-        with cancelar_coluna:
-            if st.button("Cancelar", key="cancelar_form_procedimento"):
-                st.session_state.pop("procedimento_modo", None)
-                st.rerun()
-
-        if salvar_procedimento:
-            payload_procedimento = {
-                "titulo": titulo_procedimento.strip(),
-                "categoria": categoria_procedimento.strip(),
-                "objetivo": objetivo_procedimento.strip(),
-                "materiais": materiais_procedimento.strip(),
-                "passos": passos_procedimento.strip(),
-                "seguranca": seguranca_procedimento.strip(),
-            }
-            if not all(
-                (
-                    payload_procedimento["titulo"],
-                    payload_procedimento["categoria"],
-                    payload_procedimento["passos"],
-                )
-            ):
-                st.error(
-                    "Preencha o nome, a categoria e o passo a passo."
-                )
-            else:
-                try:
-                    if procedimento_em_edicao:
-                        resposta_salvar = requests.put(
-                            f"{API_URL}/procedimentos/"
-                            f"{procedimento_em_edicao['id']}",
-                            json=payload_procedimento,
-                            headers=obter_cabecalho_auth(),
-                            timeout=30,
-                        )
-                    else:
-                        resposta_salvar = requests.post(
-                            f"{API_URL}/procedimentos/",
-                            json=payload_procedimento,
-                            headers=obter_cabecalho_auth(),
-                            timeout=30,
-                        )
-                    validar_sessao(resposta_salvar)
-                    status_sucesso = (
-                        (200,)
-                        if procedimento_em_edicao
-                        else (201,)
-                    )
-                    if resposta_salvar.status_code in status_sucesso:
-                        st.session_state["mensagem_procedimentos"] = (
-                            "Procedimento atualizado com sucesso."
-                            if procedimento_em_edicao
-                            else "Procedimento cadastrado com sucesso."
-                        )
-                        st.session_state.pop("procedimento_modo", None)
-                        st.rerun()
-                    else:
-                        st.error(
-                            "Não foi possível salvar o procedimento: "
-                            f"{extrair_erro_api(resposta_salvar)}"
-                        )
-                except requests.RequestException:
-                    st.error(
-                        "Não foi possível ligar à API para salvar o procedimento."
-                    )
-
-    pesquisa_procedimentos = st.text_input(
-        "Pesquisar por nome, categoria ou objetivo",
-        key="pesquisa_procedimentos",
-    ).strip().casefold()
-    procedimentos_filtrados = [
-        procedimento
-        for procedimento in procedimentos
-        if not pesquisa_procedimentos
-        or any(
-            pesquisa_procedimentos in procedimento[campo].casefold()
-            for campo in ("titulo", "categoria", "objetivo")
-        )
-    ]
-
-    procedimento_selecionado = procedimentos_por_id.get(
-        st.session_state.get("procedimento_selecionado")
-    )
-    if procedimento_selecionado:
-        with st.container(border=True):
-            st.caption(procedimento_selecionado["categoria"])
-            st.subheader(procedimento_selecionado["titulo"])
-            st.caption(
-                f"Responsável: {procedimento_selecionado['criado_por']} · "
-                "Última revisão: "
-                f"{pd.to_datetime(procedimento_selecionado['revisado_em']).strftime('%d/%m/%Y')}"
-            )
-            st.markdown("**Objetivo**")
-            st.write(procedimento_selecionado["objetivo"] or "Não informado.")
-            st.markdown("**Materiais e equipamentos**")
-            st.write(
-                procedimento_selecionado["materiais"] or "Não informado."
-            )
-            st.markdown("**Passo a passo**")
-            st.text(procedimento_selecionado["passos"])
-            st.markdown("**Segurança e cuidados**")
-            st.write(
-                procedimento_selecionado["seguranca"] or "Não informado."
-            )
-            editar_coluna, excluir_coluna, _ = st.columns([1, 1, 4])
-            with editar_coluna:
-                if st.button(
-                    "Editar",
-                    key=f"editar_procedimento_{procedimento_selecionado['id']}",
-                ):
-                    st.session_state["procedimento_modo"] = "editar"
-                    st.rerun()
-            with excluir_coluna:
-                confirmar_exclusao = st.checkbox(
-                    "Confirmar exclusão",
-                    key=f"confirmar_exclusao_{procedimento_selecionado['id']}",
-                )
-                if st.button(
-                    "Excluir",
-                    key=f"excluir_procedimento_{procedimento_selecionado['id']}",
-                    disabled=not confirmar_exclusao,
-                ):
-                    try:
-                        resposta_excluir = requests.delete(
-                            f"{API_URL}/procedimentos/"
-                            f"{procedimento_selecionado['id']}",
-                            headers=obter_cabecalho_auth(),
-                            timeout=30,
-                        )
-                        validar_sessao(resposta_excluir)
-                        if resposta_excluir.status_code == 200:
-                            st.session_state["mensagem_procedimentos"] = (
-                                "Procedimento excluído com sucesso."
-                            )
-                            st.session_state.pop(
-                                "procedimento_selecionado", None
-                            )
-                            st.rerun()
-                        else:
-                            st.error(
-                                "Não foi possível excluir o procedimento: "
-                                f"{extrair_erro_api(resposta_excluir)}"
-                            )
-                    except requests.RequestException:
-                        st.error(
-                            "Não foi possível ligar à API para excluir o "
-                            "procedimento."
-                        )
-
-    if not procedimentos:
+    if not documentos:
         st.info(
-            "A biblioteca ainda está vazia. Cadastre o primeiro protocolo "
-            "para compartilhar com sua equipe."
+            "Ainda não há procedimentos publicados. Adicione arquivos `.qmd` "
+            "à pasta `procedimentos` do repositório e publique o HTML."
         )
-    elif not procedimentos_filtrados:
-        st.info("Nenhum procedimento corresponde à sua pesquisa.")
     else:
-        st.markdown("#### Biblioteca")
-        for procedimento in procedimentos_filtrados:
-            with st.container(border=True):
-                informacao_coluna, acao_coluna = st.columns([5, 1])
-                with informacao_coluna:
-                    st.caption(procedimento["categoria"])
-                    st.markdown(f"**{procedimento['titulo']}**")
-                    if procedimento["objetivo"]:
-                        st.write(procedimento["objetivo"])
-                    st.caption(
-                        "Revisado em "
-                        f"{pd.to_datetime(procedimento['revisado_em']).strftime('%d/%m/%Y')}"
-                    )
-                with acao_coluna:
-                    if st.button(
-                        "Abrir",
-                        key=f"abrir_procedimento_{procedimento['id']}",
-                        use_container_width=True,
+        procedimentos_formatados = [
+            (
+                nome_arquivo,
+                html,
+                Path(nome_arquivo).stem.replace("-", " ").replace("_", " ").title(),
+            )
+            for nome_arquivo, html in documentos
+        ]
+        procedimento_aberto = st.session_state.get("procedimento_aberto")
+        procedimento_selecionado = next(
+            (
+                procedimento
+                for procedimento in procedimentos_formatados
+                if procedimento[0] == procedimento_aberto
+            ),
+            None,
+        )
+        if procedimento_selecionado:
+            if st.button("← Voltar aos procedimentos"):
+                st.session_state.pop("procedimento_aberto", None)
+                st.rerun()
+            _, html, titulo = procedimento_selecionado
+            st.subheader(titulo)
+            st.html(html)
+        else:
+            st.session_state.pop("procedimento_aberto", None)
+            pesquisa = st.text_input(
+                "Pesquisar procedimento",
+                key="pesquisa_procedimentos_qmd",
+            ).strip().casefold()
+            procedimentos_filtrados = [
+                procedimento
+                for procedimento in procedimentos_formatados
+                if not pesquisa or pesquisa in procedimento[2].casefold()
+            ]
+            if not procedimentos_filtrados:
+                st.info("Nenhum procedimento corresponde à sua pesquisa.")
+            else:
+                for inicio in range(0, len(procedimentos_filtrados), 2):
+                    colunas = st.columns(2)
+                    for coluna, procedimento in zip(
+                        colunas, procedimentos_filtrados[inicio : inicio + 2]
                     ):
-                        st.session_state["procedimento_selecionado"] = (
-                            procedimento["id"]
-                        )
-                        st.session_state.pop("procedimento_modo", None)
-                        st.rerun()
+                        nome_arquivo, _, titulo = procedimento
+                        with coluna:
+                            with st.container(border=True):
+                                st.caption("Procedimento do laboratório")
+                                st.subheader(titulo)
+                                st.write(
+                                    "Protocolo publicado em formato Quarto."
+                                )
+                                if st.button(
+                                    "Ler procedimento",
+                                    key=f"abrir_procedimento_{nome_arquivo}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["procedimento_aberto"] = (
+                                        nome_arquivo
+                                    )
+                                    st.rerun()
     st.stop()
 
 
@@ -996,8 +791,8 @@ if secao == "Caderno de reuniões":
         st.stop()
 
     try:
-        reunioes = carregar_reunioes(
-            configuracao["repository"], configuracao["token"]
+        reunioes = carregar_documentos_quarto(
+            configuracao["repository"], configuracao["token"], "atas"
         )
     except requests.RequestException as erro:
         st.error(f"Não foi possível carregar o caderno do GitHub: {erro}")

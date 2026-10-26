@@ -2,17 +2,20 @@
 
 ## Procedimentos de laboratório
 
-A seção **Procedimentos** oferece uma biblioteca compartilhada entre os
-utilizadores autenticados. Cada protocolo pode incluir nome, categoria,
-objetivo, materiais e equipamentos, passo a passo e cuidados de segurança.
-Qualquer utilizador autenticado pode cadastrar, consultar, editar e excluir
-procedimentos; a data de revisão é atualizada automaticamente ao salvar
-alterações.
+A seção **Procedimentos** segue o mesmo fluxo do caderno de reuniões: os
+protocolos são escritos em Quarto (`.qmd`), renderizados como HTML e lidos do
+repositório configurado em `MEETINGS_REPOSITORY`. Coloque os arquivos-fonte e
+os HTML publicados na pasta `procedimentos` desse repositório. Imagens usadas
+nos documentos devem ficar nessa pasta ou em subpastas dela.
 
-Os procedimentos são armazenados no banco de estoque, junto dos lotes. A tabela
-é criada automaticamente na inicialização da API. Para disponibilizar o
-recurso, publique as alterações da API e do app Streamlit; a versão do app
-depende das novas rotas `/procedimentos/` da API.
+Use [modelo-procedimento.qmd](./modelos/modelo-procedimento.qmd) como ponto de
+partida e salve cada protocolo com um nome próprio, por exemplo
+`procedimentos/POP-preparo-de-amostras.qmd`. Publique também o HTML
+correspondente; o nome do arquivo HTML aparece como título no app. Não é
+necessário configurar novas variáveis ou publicar novas rotas na API: a
+biblioteca reutiliza `MEETINGS_GITHUB_TOKEN` e a integração existente do
+caderno de reuniões. Após publicar os HTML no repositório, eles aparecem na
+seção **Procedimentos** do app.
 
 ## Recuperação de senha
 
