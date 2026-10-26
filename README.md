@@ -4,7 +4,7 @@
 
 A seção **Procedimentos** segue o mesmo fluxo do caderno de reuniões: os
 protocolos são escritos em Quarto (`.qmd`), renderizados como HTML e lidos do
-repositório configurado em `MEETINGS_REPOSITORY`. Salve cada fonte na pasta
+repositório `WILDFML/imunotec-api` por padrão. Salve cada fonte na pasta
 `procedimentos` deste repositório. O workflow do GitHub Actions gera o HTML
 automaticamente quando um `.qmd` é alterado. Imagens usadas nos documentos
 devem ficar nessa pasta ou em subpastas dela.
@@ -18,8 +18,13 @@ os vínculos aos lotes. A busca também consulta o conteúdo do protocolo.
 
 Cada usuário pode favoritar procedimentos; os favoritos são salvos na API e
 permanecem associados à conta. Para habilitar essa função, publique também a
-atualização da API antes de publicar o app Streamlit. O app reutiliza
-`MEETINGS_GITHUB_TOKEN` para ler os arquivos QMD e HTML do repositório privado.
+atualização da API antes de publicar o app Streamlit.
+
+A biblioteca de procedimentos usa `PROCEDURES_REPOSITORY`, que por padrão
+aponta para `WILDFML/imunotec-api`. Configure `PROCEDURES_GITHUB_TOKEN` com
+permissão de leitura desse repositório privado. Se essa variável não estiver
+configurada, o app tenta reutilizar `MEETINGS_GITHUB_TOKEN`. Essa configuração
+é independente de `MEETINGS_REPOSITORY`, usada pelo caderno de reuniões.
 
 O workflow de renderização precisa de permissão de escrita em Actions >
 General > Workflow permissions para publicar os HTML gerados. Se a organização

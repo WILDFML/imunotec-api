@@ -222,19 +222,29 @@ def status_revisao_procedimento(metadados):
     return f"Próxima revisão: {data_revisao.strftime('%d/%m/%Y')}"
 
 
-def configuracao_caderno():
-    def obter_segredo(nome):
-        valor = os.getenv(nome)
-        if valor:
-            return valor
-        try:
-            return st.secrets[nome]
-        except (KeyError, st.errors.StreamlitSecretNotFoundError):
-            return ""
+def obter_segredo(nome):
+    valor = os.getenv(nome)
+    if valor:
+        return valor
+    try:
+        return st.secrets[nome]
+    except (KeyError, st.errors.StreamlitSecretNotFoundError):
+        return ""
 
+
+def configuracao_caderno():
     return {
         "repository": obter_segredo("MEETINGS_REPOSITORY"),
         "token": obter_segredo("MEETINGS_GITHUB_TOKEN"),
+    }
+
+
+def configuracao_procedimentos():
+    return {
+        "repository": obter_segredo("PROCEDURES_REPOSITORY")
+        or "WILDFML/imunotec-api",
+        "token": obter_segredo("PROCEDURES_GITHUB_TOKEN")
+        or obter_segredo("MEETINGS_GITHUB_TOKEN"),
     }
 
 
@@ -909,11 +919,12 @@ if secao == "Início":
 if secao == "Procedimentos":
     st.title("🧬 Procedimentos do laboratório")
     st.caption("Protocolos do laboratório, escritos e publicados em Quarto.")
-    configuracao = configuracao_caderno()
+    configuracao = configuracao_procedimentos()
     if not configuracao["repository"] or not configuracao["token"]:
         st.info(
             "A biblioteca ainda não está conectada. O administrador precisa "
-            "configurar o repositório privado e o token de leitura do GitHub."
+            "configurar um token do GitHub com acesso de leitura ao repositório "
+            "dos procedimentos."
         )
         st.stop()
 
