@@ -1,0 +1,81 @@
+---
+title: "Nome do procedimento"
+subtitle: "Procedimento operacional padrão"
+lang: pt-BR
+categoria: "Categoria"
+tags:
+  - "palavra-chave"
+versao: "1.0"
+responsavel_revisao: "Nome do responsável"
+data_revisao: ""
+proxima_revisao: ""
+reagentes:
+  - "Nome do reagente como aparece no estoque"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  enabled: false
+---
+
+> Preencha e revise este documento conforme as práticas aprovadas pelo
+> laboratório. Este modelo não substitui a validação técnica, o treinamento
+> ou as orientações institucionais de biossegurança.
+
+## 1. Controle do documento
+
+- **Código:** preencher
+- **Versão:** 1.0
+- **Responsável pela revisão:** preencher
+- **Data de vigência:** preencher
+
+## 2. Objetivo
+
+Descreva para que serve o procedimento e qual resultado deve ser obtido.
+
+## 3. Escopo
+
+Informe a quais atividades, materiais, equipamentos ou pessoas este
+procedimento se aplica.
+
+## 4. Responsabilidades
+
+Descreva quem executa, supervisiona e revisa o procedimento.
+
+## 5. Materiais e equipamentos
+
+Liste os materiais, equipamentos, reagentes e documentos necessários.
+Inclua especificações relevantes e referências às fichas de segurança,
+quando aplicável.
+
+## 6. Segurança e cuidados
+
+Registre os riscos identificados, os equipamentos de proteção, as medidas
+preventivas, o descarte e as orientações institucionais aplicáveis.
+
+## 7. Procedimento
+
+Descreva as etapas na ordem de execução. Inclua os pontos de controle e
+critérios de aceitação necessários.
+
+1. **Preparação:** descrever.
+2. **Execução:** descrever.
+3. **Verificação do resultado:** descrever.
+4. **Finalização e descarte:** descrever.
+
+## 8. Registros
+
+Indique quais informações devem ser registradas, onde serão armazenadas e
+por quanto tempo devem ser mantidas.
+
+## 9. Referências
+
+Liste normas, manuais, artigos, fichas de segurança e documentos
+institucionais consultados.
+
+## 10. Histórico de revisões
+
+| Versão | Data | Descrição da alteração | Responsável |
+|---|---|---|---|
+| 1.0 | preencher | Emissão inicial | preencher |
