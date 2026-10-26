@@ -45,9 +45,8 @@ Descreva quem executa, supervisiona e revisa o procedimento.
 
 ## 5. Materiais e equipamentos
 
-Liste os materiais, equipamentos, reagentes e documentos necessários.
-Inclua especificações relevantes e referências às fichas de segurança,
-quando aplicável.
+GLICERINA
+Polissorbato
 
 ## 6. Segurança e cuidados
 
