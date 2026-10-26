@@ -1,8 +1,14 @@
+import hashlib
 import hmac
 import logging
 import os
-from typing import List
+import secrets
+import smtplib
 from datetime import datetime, timedelta
+from email.message import EmailMessage
+from typing import List, TypedDict
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from fastapi import FastAPI, Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.exc import IntegrityError
@@ -32,9 +38,20 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 ACCOUNT_CREATION_KEY = os.getenv("ACCOUNT_CREATION_KEY")
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+class ConfiguracaoEmail(TypedDict):
+    host: str
+    port: int
+    username: str
+    password: str
+    from_email: str
+    frontend_url: str
+
 
 # Cria as tabelas em cada banco e falha na inicialização se uma conexão não funcionar.
 AuthBase.metadata.create_all(bind=auth_engine)
@@ -54,6 +71,108 @@ def verificar_senha(senha_pura, senha_hash):
 
 def obter_hash_senha(senha):
     return pwd_context.hash(senha)
+
+
+def configuracao_email() -> ConfiguracaoEmail:
+    host = os.getenv("SMTP_HOST")
+    porta = os.getenv("SMTP_PORT")
+    username = os.getenv("SMTP_USERNAME")
+    password = os.getenv("SMTP_PASSWORD")
+    from_email = os.getenv("SMTP_FROM_EMAIL")
+    frontend_url = os.getenv("FRONTEND_URL")
+    if (
+        not host
+        or not porta
+        or not username
+        or not password
+        or not from_email
+        or not frontend_url
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="O serviço de recuperação de senha não está configurado.",
+        )
+
+    try:
+        porta_int = int(porta)
+    except ValueError as erro:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="A porta SMTP configurada é inválida.",
+        ) from erro
+
+    url_frontend = urlsplit(frontend_url)
+    if url_frontend.scheme not in ("http", "https") or not url_frontend.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="A URL do aplicativo para recuperação de senha é inválida.",
+        )
+    return {
+        "host": host,
+        "port": porta_int,
+        "username": username,
+        "password": password,
+        "from_email": from_email,
+        "frontend_url": frontend_url,
+    }
+
+
+def enviar_email_recuperacao(
+    destinatario: str, token: str, configuracao: ConfiguracaoEmail
+) -> None:
+    partes_url = urlsplit(configuracao["frontend_url"])
+    parametros = parse_qsl(partes_url.query, keep_blank_values=True)
+    parametros.append(("reset_token", token))
+    link_recuperacao = urlunsplit(
+        (
+            partes_url.scheme,
+            partes_url.netloc,
+            partes_url.path,
+            urlencode(parametros),
+            "",
+        )
+    )
+
+    mensagem = EmailMessage()
+    mensagem["Subject"] = "Recuperação de senha do Imunotec"
+    mensagem["From"] = configuracao["from_email"]
+    mensagem["To"] = destinatario
+    mensagem.set_content(
+        "Recebemos uma solicitação para redefinir a senha da sua conta "
+        "Imunotec.\n\n"
+        f"Acesse este link para criar uma nova senha (válido por "
+        f"{PASSWORD_RESET_TOKEN_EXPIRE_MINUTES} minutos e utilizável uma "
+        f"única vez):\n{link_recuperacao}\n\n"
+        "Se você não solicitou esta alteração, ignore este e-mail."
+    )
+
+    try:
+        if configuracao["port"] == 465:
+            with smtplib.SMTP_SSL(
+                configuracao["host"], configuracao["port"], timeout=15
+            ) as servidor:
+                servidor.login(
+                    configuracao["username"], configuracao["password"]
+                )
+                servidor.send_message(mensagem)
+        else:
+            with smtplib.SMTP(
+                configuracao["host"], configuracao["port"], timeout=15
+            ) as servidor:
+                servidor.ehlo()
+                servidor.starttls()
+                servidor.ehlo()
+                servidor.login(
+                    configuracao["username"], configuracao["password"]
+                )
+                servidor.send_message(mensagem)
+    except (OSError, smtplib.SMTPException):
+        logger.exception("Falha ao enviar e-mail de recuperação de senha.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Não foi possível enviar o e-mail de recuperação agora.",
+        )
+
 
 def obter_utilizador_atual(
     token: str = Depends(oauth2_scheme),
@@ -151,6 +270,115 @@ def login_para_token(
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     
     return {"access_token": encoded_jwt, "token_type": "bearer"}
+
+
+@app.post(
+    "/password-reset-request",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def solicitar_recuperacao_senha(
+    pedido: schemas.PasswordResetRequest,
+    db: Session = Depends(get_auth_db),
+):
+    configuracao = configuracao_email()
+    email = str(pedido.email).strip().lower()
+    user = db.query(models.User).filter(func.lower(models.User.email) == email).first()
+    if user is None:
+        return {
+            "mensagem": (
+                "Se o e-mail estiver cadastrado, você receberá instruções "
+                "para redefinir a senha."
+            )
+        }
+
+    agora = datetime.utcnow()
+    pedido_recente = (
+        db.query(models.PasswordResetToken)
+        .filter(
+            models.PasswordResetToken.user_id == user.id,
+            models.PasswordResetToken.created_at
+            >= agora - timedelta(minutes=1),
+        )
+        .first()
+    )
+    if pedido_recente:
+        return {
+            "mensagem": (
+                "Se o e-mail estiver cadastrado, você receberá instruções "
+                "para redefinir a senha."
+            )
+        }
+
+    token = secrets.token_urlsafe(32)
+    db.query(models.PasswordResetToken).filter(
+        models.PasswordResetToken.user_id == user.id
+    ).delete(synchronize_session=False)
+    db.add(
+        models.PasswordResetToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+            created_at=agora,
+            expires_at=agora
+            + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES),
+        )
+    )
+    enviar_email_recuperacao(user.email, token, configuracao)
+    db.commit()
+
+    return {
+        "mensagem": (
+            "Se o e-mail estiver cadastrado, você receberá instruções "
+            "para redefinir a senha."
+        )
+    }
+
+
+@app.post("/password-reset-confirm")
+def confirmar_recuperacao_senha(
+    pedido: schemas.PasswordResetConfirm,
+    db: Session = Depends(get_auth_db),
+):
+    token_hash = hashlib.sha256(pedido.token.encode("utf-8")).hexdigest()
+    agora = datetime.utcnow()
+    registro = (
+        db.query(models.PasswordResetToken)
+        .filter(
+            models.PasswordResetToken.token_hash == token_hash,
+            models.PasswordResetToken.expires_at > agora,
+        )
+        .with_for_update()
+        .first()
+    )
+    if registro is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O link de recuperação é inválido ou expirou.",
+        )
+
+    user = db.query(models.User).filter(models.User.id == registro.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O link de recuperação é inválido ou expirou.",
+        )
+
+    token_removido = (
+        db.query(models.PasswordResetToken)
+        .filter(
+            models.PasswordResetToken.id == registro.id,
+            models.PasswordResetToken.expires_at > agora,
+        )
+        .delete(synchronize_session=False)
+    )
+    if token_removido != 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O link de recuperação é inválido ou expirou.",
+        )
+
+    user.hashed_password = obter_hash_senha(pedido.password)
+    db.commit()
+    return {"mensagem": "Senha redefinida com sucesso."}
 
 
 # --- ROTAS DE LOTES E REAGENTES (CRUD) ---

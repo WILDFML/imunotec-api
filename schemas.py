@@ -21,6 +21,16 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
 
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(min_length=32, max_length=128)
+    password: str = Field(min_length=8)
+
+
 class UserResponse(BaseModel):
     id: int
     email: str

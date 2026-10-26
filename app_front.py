@@ -220,6 +220,47 @@ if "access_token" not in st.session_state:
         unsafe_allow_html=True,
     )
 
+    reset_token = st.query_params.get("reset_token")
+    if reset_token:
+        st.subheader("Criar uma nova senha")
+        with st.form("form_redefinir_senha"):
+            nova_senha = st.text_input(
+                "Nova senha (mínimo 8 caracteres)", type="password"
+            )
+            confirmar_senha = st.text_input(
+                "Confirmar nova senha", type="password"
+            )
+            redefinir = st.form_submit_button(
+                "Redefinir senha", type="primary", use_container_width=True
+            )
+
+        if redefinir:
+            if nova_senha != confirmar_senha:
+                st.error("As senhas não coincidem.")
+            else:
+                try:
+                    resposta = requests.post(
+                        f"{API_URL}/password-reset-confirm",
+                        json={"token": reset_token, "password": nova_senha},
+                        timeout=30,
+                    )
+                    if resposta.status_code == 200:
+                        st.session_state["senha_redefinida"] = True
+                        st.query_params.clear()
+                        st.rerun()
+                    else:
+                        st.error(
+                            "Não foi possível redefinir a senha: "
+                            f"{extrair_erro_api(resposta)}"
+                        )
+                except requests.RequestException:
+                    st.error("Não foi possível ligar à API. Verifique a ligação.")
+
+        if st.button("Voltar ao login"):
+            st.query_params.clear()
+            st.rerun()
+        st.stop()
+
     branding, access = st.columns([1.05, 0.95], gap="large")
     with branding:
         logo_columns = st.columns([1, 5, 1])
@@ -237,8 +278,12 @@ if "access_token" not in st.session_state:
 
     with access:
         st.subheader("Acesso ao laboratório")
+        if st.session_state.pop("senha_redefinida", False):
+            st.success("Senha redefinida. Entre com a nova senha.")
         st.caption("Entre na sua conta ou crie um novo acesso autorizado.")
-        login_tab, register_tab = st.tabs(["Entrar", "Criar conta"])
+        login_tab, register_tab, recovery_tab = st.tabs(
+            ["Entrar", "Criar conta", "Esqueci minha senha"]
+        )
 
         with login_tab:
             with st.form("form_login"):
@@ -261,6 +306,41 @@ if "access_token" not in st.session_state:
                     else:
                         st.error(
                             f"Não foi possível iniciar sessão: {extrair_erro_api(resposta)}"
+                        )
+                except requests.RequestException:
+                    st.error("Não foi possível ligar à API. Verifique a ligação.")
+
+        with recovery_tab:
+            st.caption(
+                "Se o e-mail estiver cadastrado, enviaremos um link para "
+                "redefinir sua senha."
+            )
+            with st.form("form_solicitar_recuperacao"):
+                email_recuperacao = st.text_input(
+                    "E-mail da conta", placeholder="nome@laboratorio.org"
+                )
+                solicitar_recuperacao = st.form_submit_button(
+                    "Enviar link de recuperação",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+            if solicitar_recuperacao:
+                try:
+                    resposta = requests.post(
+                        f"{API_URL}/password-reset-request",
+                        json={"email": email_recuperacao},
+                        timeout=30,
+                    )
+                    if resposta.status_code == 202:
+                        st.success(
+                            "Se o e-mail estiver cadastrado, você receberá "
+                            "instruções para redefinir a senha."
+                        )
+                    else:
+                        st.error(
+                            "Não foi possível solicitar a recuperação: "
+                            f"{extrair_erro_api(resposta)}"
                         )
                 except requests.RequestException:
                     st.error("Não foi possível ligar à API. Verifique a ligação.")
