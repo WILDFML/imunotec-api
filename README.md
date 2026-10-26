@@ -5,9 +5,9 @@
 A seção **Procedimentos** segue o mesmo fluxo do caderno de reuniões: os
 protocolos são escritos em Quarto (`.qmd`), renderizados como HTML e lidos do
 repositório `WILDFML/imunotec-api` por padrão. Salve cada fonte na pasta
-`procedimentos` deste repositório. O workflow do GitHub Actions gera o HTML
-automaticamente quando um `.qmd` é alterado. Imagens usadas nos documentos
-devem ficar nessa pasta ou em subpastas dela.
+`procedimentos` deste repositório. O workflow do GitHub Actions gera versões
+HTML e PDF automaticamente quando um `.qmd` é alterado. Imagens usadas nos
+documentos devem ficar nessa pasta ou em subpastas dela.
 
 Use [modelo-procedimento.qmd](./modelos/modelo-procedimento.qmd) como ponto de
 partida e salve cada protocolo com um nome próprio, por exemplo
@@ -27,9 +27,9 @@ configurada, o app tenta reutilizar `MEETINGS_GITHUB_TOKEN`. Essa configuração
 é independente de `MEETINGS_REPOSITORY`, usada pelo caderno de reuniões.
 
 O workflow de renderização precisa de permissão de escrita em Actions >
-General > Workflow permissions para publicar os HTML gerados. Se a organização
-ou a proteção da branch bloquear esse tipo de commit, ajuste a política do
-repositório antes de depender da renderização automática.
+General > Workflow permissions para publicar os HTML e PDFs gerados. Se a
+organização ou a proteção da branch bloquear esse tipo de commit, ajuste a
+política do repositório antes de depender da renderização automática.
 
 ## Recuperação de senha
 

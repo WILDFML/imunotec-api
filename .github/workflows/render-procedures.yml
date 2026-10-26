@@ -24,16 +24,20 @@ jobs:
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
 
+      - name: Install TinyTeX
+        run: quarto install tinytex
+
       - name: Render procedure documents
         run: |
           set -euo pipefail
           while IFS= read -r -d '' file; do
             quarto render "$file" --to html
+            quarto render "$file" --to pdf
           done < <(find procedimentos -type f -name '*.qmd' -print0)
 
       - name: Commit rendered documents
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Render laboratory procedures"
+          commit_message: "Render laboratory procedures as HTML and PDF"
           commit_user_name: github-actions[bot]
           commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com

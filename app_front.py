@@ -403,6 +403,33 @@ def carregar_documentos_quarto(repository, token, diretorio):
     return documentos
 
 
+def carregar_pdf_procedimento(repository, token, diretorio, nome_arquivo):
+    caminho_pdf = posixpath.join(
+        posixpath.normpath(diretorio),
+        f"{Path(nome_arquivo).stem}.pdf",
+    )
+    resposta = requests.get(
+        (
+            f"https://api.github.com/repos/{repository}/contents/"
+            f"{quote(caminho_pdf, safe='/')}"
+        ),
+        headers={
+            "Accept": "application/vnd.github.raw+json",
+            "Authorization": f"******",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        timeout=30,
+    )
+    if resposta.status_code == 404:
+        return None
+    resposta.raise_for_status()
+    if not resposta.content.startswith(b"%PDF-"):
+        raise ValueError(
+            f"O arquivo {Path(nome_arquivo).stem}.pdf não é um PDF válido."
+        )
+    return resposta.content
+
+
 st.markdown(
     """
     <style>
@@ -1095,6 +1122,32 @@ if secao == "Procedimentos":
             status_revisao_procedimento(metadados),
         ]
         st.caption(" · ".join(detalhe for detalhe in detalhes_revisao if detalhe))
+        try:
+            pdf_procedimento = carregar_pdf_procedimento(
+                configuracao["repository"],
+                configuracao["token"],
+                "procedimentos",
+                nome_arquivo,
+            )
+        except requests.RequestException as erro:
+            pdf_procedimento = None
+            st.warning(f"Não foi possível carregar o PDF: {erro}")
+        except ValueError as erro:
+            pdf_procedimento = None
+            st.warning(str(erro))
+        if pdf_procedimento:
+            st.download_button(
+                "Baixar procedimento em PDF",
+                data=pdf_procedimento,
+                file_name=f"{Path(nome_arquivo).stem}.pdf",
+                mime="application/pdf",
+                key=f"baixar_pdf_procedimento_{nome_arquivo}",
+            )
+        else:
+            st.caption(
+                "PDF ainda não publicado. Ele será gerado pelo workflow "
+                "quando o procedimento for renderizado."
+            )
         if nome_arquivo in favoritos:
             rotulo_favorito = "★ Remover dos favoritos"
             favoritar = False
