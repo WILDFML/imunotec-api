@@ -158,67 +158,169 @@ def carregar_reunioes(repository, token):
     return reunioes
 
 
-if "access_token" not in st.session_state:
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background:
-                radial-gradient(ellipse at 12% 10%, #e4f5ef 0, transparent 38%),
-                #f5f8f7;
-        }
+st.markdown(
+    """
+    <style>
+    :root {
+        --imunotec-green: #087f68;
+        --imunotec-green-dark: #066b58;
+        --imunotec-ink: #183c34;
+        --imunotec-muted: #647a73;
+        --imunotec-border: #e1ebe6;
+        --imunotec-surface: #ffffff;
+    }
+    .stApp {
+        background:
+            radial-gradient(ellipse at 12% 4%, #e5f4ed 0, transparent 32%),
+            #f5f8f7;
+    }
+    div[data-testid="stMainBlockContainer"] {
+        max-width: 1400px;
+        padding-top: 2.5rem;
+        padding-bottom: 3rem;
+    }
+    h1, h2, h3 {
+        color: var(--imunotec-ink);
+        letter-spacing: -0.035em;
+    }
+    h1 {
+        font-weight: 750;
+    }
+    [data-testid="stCaptionContainer"],
+    [data-testid="stMarkdownContainer"] p {
+        color: var(--imunotec-muted);
+    }
+    section[data-testid="stSidebar"] {
+        background: #f0f6f3;
+        border-right: 1px solid var(--imunotec-border);
+    }
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: var(--imunotec-ink);
+    }
+    section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+        border-radius: 9px;
+    }
+    button[kind="primary"],
+    div[data-testid="stForm"] button[kind="primaryFormSubmit"] {
+        min-height: 2.7rem;
+        border-color: var(--imunotec-green);
+        border-radius: 10px;
+        background: var(--imunotec-green);
+        font-weight: 650;
+        transition: background-color 150ms ease, border-color 150ms ease,
+            transform 150ms ease;
+    }
+    button[kind="primary"]:hover,
+    div[data-testid="stForm"] button[kind="primaryFormSubmit"]:hover {
+        border-color: var(--imunotec-green-dark);
+        background: var(--imunotec-green-dark);
+        transform: translateY(-1px);
+    }
+    button[kind="secondary"] {
+        border-radius: 10px;
+        border-color: #d5e3dc;
+        color: var(--imunotec-ink);
+    }
+    button:focus-visible {
+        outline: 3px solid #70c6aa;
+        outline-offset: 2px;
+    }
+    div[data-testid="stForm"] {
+        padding: 1.4rem;
+        border: 1px solid var(--imunotec-border);
+        border-radius: 16px;
+        background: var(--imunotec-surface);
+        box-shadow: 0 12px 32px rgba(25, 65, 52, 0.06);
+    }
+    section[data-testid="stSidebar"] div[data-testid="stForm"] {
+        padding: 1rem;
+        box-shadow: 0 5px 18px rgba(25, 65, 52, 0.04);
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: var(--imunotec-border);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 8px 24px rgba(25, 65, 52, 0.045);
+    }
+    div[data-testid="stMetric"] {
+        min-height: 112px;
+        padding: 1rem 1.1rem;
+        border: 1px solid var(--imunotec-border);
+        border-radius: 14px;
+        background: var(--imunotec-surface);
+        box-shadow: 0 8px 22px rgba(25, 65, 52, 0.045);
+    }
+    div[data-testid="stMetricLabel"] {
+        color: var(--imunotec-muted);
+        font-weight: 600;
+    }
+    div[data-testid="stMetricValue"] {
+        color: var(--imunotec-ink);
+        font-weight: 750;
+    }
+    div[data-testid="stDataFrame"] {
+        overflow: hidden;
+        border: 1px solid var(--imunotec-border);
+        border-radius: 14px;
+        background: var(--imunotec-surface);
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 9px 9px 0 0;
+        color: var(--imunotec-muted);
+    }
+    .stTabs [data-baseweb="tab-highlight"] {
+        background-color: var(--imunotec-green);
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: var(--imunotec-green);
+        font-weight: 650;
+    }
+    [data-baseweb="input"],
+    [data-baseweb="select"] > div {
+        border-radius: 9px;
+    }
+    .login-panel {
+        padding: 1.5rem 1.6rem;
+        color: #f4fffb;
+        background: linear-gradient(145deg, #075c50, #0c8a70);
+        border-radius: 18px;
+        box-shadow: 0 20px 50px rgba(18, 92, 74, 0.18);
+    }
+    .login-panel p {
+        margin: 0;
+        color: #ddf5ec;
+        font-size: 1.02rem;
+        line-height: 1.65;
+    }
+    .login-note {
+        margin-top: 2.4rem;
+        padding-top: 1.1rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.22);
+        color: #d2eee5;
+        font-size: 0.86rem;
+    }
+    @media (max-width: 768px) {
         div[data-testid="stMainBlockContainer"] {
-            max-width: 1080px;
-            padding-top: 4rem;
-            padding-bottom: 3rem;
+            padding-top: 1.5rem;
+            padding-bottom: 2rem;
         }
         div[data-testid="stForm"] {
-            padding: 1.6rem;
-            background: #ffffff;
-            border: 1px solid #e2eae7;
-            border-radius: 16px;
-            box-shadow: 0 16px 45px rgba(25, 65, 52, 0.08);
-        }
-        div[data-testid="stForm"] button[kind="primaryFormSubmit"] {
-            min-height: 2.8rem;
-            border-radius: 9px;
-            background: #087f68;
-            border-color: #087f68;
-        }
-        div[data-testid="stForm"] button[kind="primaryFormSubmit"]:hover {
-            background: #066b58;
-            border-color: #066b58;
-        }
-        .stTabs [data-baseweb="tab-highlight"] {
-            background-color: #087f68;
-        }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {
-            color: #087f68;
+            padding: 1rem;
         }
         .login-panel {
-            padding: 1.5rem 1.6rem;
-            color: #f4fffb;
-            background: linear-gradient(145deg, #075c50, #0c8a70);
-            border-radius: 18px;
-            box-shadow: 0 20px 50px rgba(18, 92, 74, 0.18);
+            margin-bottom: 1.5rem;
         }
-        .login-panel p {
-            margin: 0;
-            color: #ddf5ec;
-            font-size: 1.02rem;
-            line-height: 1.65;
-        }
-        .login-note {
-            margin-top: 2.4rem;
-            padding-top: 1.1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.22);
-            color: #d2eee5;
-            font-size: 0.86rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+if "access_token" not in st.session_state:
 
     reset_token = st.query_params.get("reset_token")
     if reset_token:
