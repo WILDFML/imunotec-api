@@ -1,5 +1,19 @@
 # Imunotec Estoque
 
+## Procedimentos de laboratório
+
+A seção **Procedimentos** oferece uma biblioteca compartilhada entre os
+utilizadores autenticados. Cada protocolo pode incluir nome, categoria,
+objetivo, materiais e equipamentos, passo a passo e cuidados de segurança.
+Qualquer utilizador autenticado pode cadastrar, consultar, editar e excluir
+procedimentos; a data de revisão é atualizada automaticamente ao salvar
+alterações.
+
+Os procedimentos são armazenados no banco de estoque, junto dos lotes. A tabela
+é criada automaticamente na inicialização da API. Para disponibilizar o
+recurso, publique as alterações da API e do app Streamlit; a versão do app
+depende das novas rotas `/procedimentos/` da API.
+
 ## Recuperação de senha
 
 A recuperação envia um link por e-mail. Configure estas variáveis no ambiente

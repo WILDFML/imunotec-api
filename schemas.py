@@ -1,5 +1,5 @@
-from datetime import date
-from pydantic import BaseModel, EmailStr, Field
+from datetime import date, datetime
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 class LoteCreate(BaseModel):
     nome_reagente: str
@@ -15,6 +15,41 @@ class LoteResponse(LoteCreate):
 
     class Config:
         from_attributes = True
+
+
+class ProcedimentoCreate(BaseModel):
+    titulo: str = Field(min_length=1, max_length=150)
+    categoria: str = Field(min_length=1, max_length=80)
+    objetivo: str = Field(default="", max_length=10000)
+    materiais: str = Field(default="", max_length=10000)
+    passos: str = Field(min_length=1, max_length=30000)
+    seguranca: str = Field(default="", max_length=10000)
+
+    @field_validator(
+        "titulo", "categoria", "objetivo", "materiais", "passos", "seguranca"
+    )
+    @classmethod
+    def remover_espacos_externos(cls, valor: str) -> str:
+        return valor.strip()
+
+    @field_validator("titulo", "categoria", "passos")
+    @classmethod
+    def rejeitar_valor_vazio(cls, valor: str) -> str:
+        if not valor:
+            raise ValueError("Este campo não pode ficar vazio.")
+        return valor
+
+
+class ProcedimentoResponse(ProcedimentoCreate):
+    id: int
+    criado_por: str
+    criado_em: datetime
+    atualizado_em: datetime
+    revisado_em: datetime
+
+    class Config:
+        from_attributes = True
+
 
 # --- NOVOS SCHEMAS PARA UTILIZADORES E AUTH ---
 class UserCreate(BaseModel):
