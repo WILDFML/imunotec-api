@@ -3,6 +3,16 @@ title: "Nome do procedimento"
 subtitle: "Procedimento operacional padrão"
 date: 2026-01-01
 lang: pt-BR
+categoria: "Categoria do procedimento"
+tags:
+  - "etiqueta 1"
+  - "etiqueta 2"
+versao: "1.0"
+responsavel_revisao: "Nome do responsável"
+data_revisao: 2026-01-01
+proxima_revisao: 2027-01-01
+reagentes:
+  - "Nome do reagente como aparece no estoque"
 format:
   html:
     toc: true

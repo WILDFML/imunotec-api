@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from database import AuthBase, StockBase
 
@@ -43,3 +44,15 @@ class PasswordResetToken(AuthBase):
     token_hash = Column(String(64), unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at = Column(DateTime, nullable=False)
+
+
+class ProcedimentoFavorito(AuthBase):
+    __tablename__ = "procedimentos_favoritos"
+    __table_args__ = (
+        UniqueConstraint("user_id", "arquivo", name="uq_user_procedure_file"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    arquivo = Column(String(180), nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)

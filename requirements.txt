@@ -10,3 +10,4 @@ email-validator
 streamlit
 pandas
 requests
+PyYAML>=6.0

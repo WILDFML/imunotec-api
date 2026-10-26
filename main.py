@@ -381,6 +381,76 @@ def confirmar_recuperacao_senha(
     return {"mensagem": "Senha redefinida com sucesso."}
 
 
+@app.get("/favoritos/procedimentos", response_model=List[str])
+def listar_procedimentos_favoritos(
+    db: Session = Depends(get_auth_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
+    favoritos = (
+        db.query(models.ProcedimentoFavorito.arquivo)
+        .filter(models.ProcedimentoFavorito.user_id == current_user.id)
+        .order_by(models.ProcedimentoFavorito.arquivo)
+        .all()
+    )
+    return [arquivo for (arquivo,) in favoritos]
+
+
+@app.post("/favoritos/procedimentos")
+def favoritar_procedimento(
+    dados: schemas.ProcedimentoFavoritoCreate,
+    db: Session = Depends(get_auth_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
+    favorito_existente = (
+        db.query(models.ProcedimentoFavorito)
+        .filter(
+            models.ProcedimentoFavorito.user_id == current_user.id,
+            models.ProcedimentoFavorito.arquivo == dados.arquivo,
+        )
+        .first()
+    )
+    if favorito_existente is None:
+        db.add(
+            models.ProcedimentoFavorito(
+                user_id=current_user.id,
+                arquivo=dados.arquivo,
+            )
+        )
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            favorito_existente = (
+                db.query(models.ProcedimentoFavorito)
+                .filter(
+                    models.ProcedimentoFavorito.user_id == current_user.id,
+                    models.ProcedimentoFavorito.arquivo == dados.arquivo,
+                )
+                .first()
+            )
+            if favorito_existente is None:
+                raise
+    return {"mensagem": "Procedimento adicionado aos favoritos."}
+
+
+@app.delete("/favoritos/procedimentos")
+def desfavoritar_procedimento(
+    dados: schemas.ProcedimentoFavoritoCreate,
+    db: Session = Depends(get_auth_db),
+    current_user: models.User = Depends(obter_utilizador_atual),
+):
+    (
+        db.query(models.ProcedimentoFavorito)
+        .filter(
+            models.ProcedimentoFavorito.user_id == current_user.id,
+            models.ProcedimentoFavorito.arquivo == dados.arquivo,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"mensagem": "Procedimento removido dos favoritos."}
+
+
 # --- ROTAS DE LOTES E REAGENTES (CRUD) ---
 
 @app.post("/lotes/", response_model=schemas.LoteResponse)

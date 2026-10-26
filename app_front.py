@@ -3,13 +3,16 @@ import mimetypes
 import os
 import posixpath
 import re
+import unicodedata
+from datetime import date, datetime
+from html.parser import HTMLParser
 from pathlib import Path
-from datetime import date
 from urllib.parse import quote, unquote, urlsplit
 
 import pandas as pd
 import requests
 import streamlit as st
+import yaml
 
 # Configuração da página
 st.set_page_config(
@@ -49,6 +52,174 @@ def buscar_lotes():
     )
     validar_sessao(resposta)
     return resposta
+
+
+def normalizar_texto(texto):
+    texto_normalizado = unicodedata.normalize("NFKD", texto.casefold())
+    return "".join(
+        caractere
+        for caractere in texto_normalizado
+        if not unicodedata.combining(caractere)
+    )
+
+
+class ExtratorTextoHTML(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.partes = []
+        self.nivel_ignorado = 0
+
+    def handle_starttag(self, tag, atributos):
+        if tag in ("script", "style"):
+            self.nivel_ignorado += 1
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self.nivel_ignorado:
+            self.nivel_ignorado -= 1
+
+    def handle_data(self, dados):
+        if not self.nivel_ignorado:
+            self.partes.append(dados)
+
+
+def extrair_texto_html(conteudo_html):
+    extrator = ExtratorTextoHTML()
+    extrator.feed(conteudo_html)
+    texto = " ".join(extrator.partes)
+    return " ".join(texto.split())
+
+
+def extrair_metadados_qmd(conteudo_qmd, nome_arquivo):
+    linhas = conteudo_qmd.lstrip("\ufeff").splitlines()
+    if not linhas or linhas[0].strip() != "---":
+        raise ValueError(
+            f"O arquivo {nome_arquivo} precisa iniciar com metadados YAML."
+        )
+
+    try:
+        fim_cabecalho = next(
+            indice
+            for indice, linha in enumerate(linhas[1:], start=1)
+            if linha.strip() in ("---", "...")
+        )
+        metadados = yaml.safe_load("\n".join(linhas[1:fim_cabecalho])) or {}
+    except (StopIteration, yaml.YAMLError) as erro:
+        raise ValueError(
+            f"Não foi possível ler os metadados YAML de {nome_arquivo}."
+        ) from erro
+
+    if not isinstance(metadados, dict):
+        raise ValueError(
+            f"Os metadados de {nome_arquivo} precisam ser um objeto YAML."
+        )
+
+    def texto(chave, padrao=""):
+        valor = metadados.get(chave, padrao)
+        if valor is None:
+            return ""
+        if not isinstance(valor, (str, int, float, date, datetime)):
+            raise ValueError(
+                f"O campo '{chave}' em {nome_arquivo} precisa ser um texto."
+            )
+        return str(valor)
+
+    def lista_texto(chave):
+        valores = metadados.get(chave, [])
+        if valores is None:
+            return []
+        if isinstance(valores, str):
+            valores = [valores]
+        if not isinstance(valores, list) or not all(
+            isinstance(valor, (str, int, float)) for valor in valores
+        ):
+            raise ValueError(
+                f"O campo '{chave}' em {nome_arquivo} precisa ser uma lista."
+            )
+        return [str(valor).strip() for valor in valores if str(valor).strip()]
+
+    def data_iso(chave):
+        valor = metadados.get(chave)
+        if valor in (None, ""):
+            return ""
+        if isinstance(valor, datetime):
+            return valor.date().isoformat()
+        if isinstance(valor, date):
+            return valor.isoformat()
+        if isinstance(valor, str):
+            try:
+                return date.fromisoformat(valor).isoformat()
+            except ValueError as erro:
+                raise ValueError(
+                    f"O campo '{chave}' em {nome_arquivo} precisa usar "
+                    "o formato AAAA-MM-DD."
+                ) from erro
+        raise ValueError(
+            f"O campo '{chave}' em {nome_arquivo} precisa ser uma data."
+        )
+
+    nome_base = Path(nome_arquivo).stem.replace("-", " ").replace("_", " ")
+    titulo = texto("title", nome_base).strip()
+    if not titulo:
+        titulo = nome_base.title()
+
+    tags = lista_texto("tags")
+    categoria = texto("categoria", "Geral").strip() or "Geral"
+    reagentes = lista_texto("reagentes")
+    revisado_em = data_iso("data_revisao")
+    proxima_revisao = data_iso("proxima_revisao")
+    if revisado_em and proxima_revisao:
+        if date.fromisoformat(proxima_revisao) < date.fromisoformat(revisado_em):
+            raise ValueError(
+                f"A próxima revisão de {nome_arquivo} não pode anteceder "
+                "a última revisão."
+            )
+
+    return {
+        "titulo": titulo,
+        "categoria": categoria,
+        "tags": tags,
+        "versao": texto("versao").strip(),
+        "responsavel_revisao": texto("responsavel_revisao").strip(),
+        "data_revisao": revisado_em,
+        "proxima_revisao": proxima_revisao,
+        "reagentes": reagentes,
+    }
+
+
+def buscar_favoritos_procedimentos():
+    resposta = requests.get(
+        f"{API_URL}/favoritos/procedimentos",
+        headers=obter_cabecalho_auth(),
+        timeout=30,
+    )
+    validar_sessao(resposta)
+    return resposta
+
+
+def atualizar_favorito_procedimento(arquivo, favoritar):
+    metodo = requests.post if favoritar else requests.delete
+    resposta = metodo(
+        f"{API_URL}/favoritos/procedimentos",
+        json={"arquivo": arquivo},
+        headers=obter_cabecalho_auth(),
+        timeout=30,
+    )
+    validar_sessao(resposta)
+    return resposta
+
+
+def status_revisao_procedimento(metadados):
+    proxima_revisao = metadados.get("proxima_revisao")
+    if not proxima_revisao:
+        return "Sem data de revisão"
+
+    data_revisao = date.fromisoformat(proxima_revisao)
+    dias_restantes = (data_revisao - date.today()).days
+    if dias_restantes < 0:
+        return f"Revisão atrasada desde {data_revisao.strftime('%d/%m/%Y')}"
+    if dias_restantes <= 30:
+        return f"Revisão próxima: {data_revisao.strftime('%d/%m/%Y')}"
+    return f"Próxima revisão: {data_revisao.strftime('%d/%m/%Y')}"
 
 
 def configuracao_caderno():
@@ -139,14 +310,19 @@ def carregar_documentos_quarto(repository, token, diretorio):
         item
         for item in resposta.json()
         if item.get("type") == "file"
-        and item.get("name", "").lower().endswith(".html")
-        and not item.get("name", "").startswith("_")
     ]
+    arquivos_por_nome = {item.get("name"): item for item in arquivos}
     documentos = []
-    for arquivo in sorted(arquivos, key=lambda item: item["name"], reverse=True):
-        conteudo_resposta = requests.get(
-            arquivo["url"], headers=headers, timeout=20
-        )
+    arquivos_html = [
+        arquivo
+        for arquivo in arquivos
+        if arquivo.get("name", "").lower().endswith(".html")
+        and not arquivo.get("name", "").startswith("_")
+    ]
+    for arquivo in sorted(
+        arquivos_html, key=lambda item: item["name"], reverse=True
+    ):
+        conteudo_resposta = requests.get(arquivo["url"], headers=headers, timeout=20)
         conteudo_resposta.raise_for_status()
         payload = conteudo_resposta.json()
         conteudo_codificado = payload.get("content")
@@ -167,7 +343,53 @@ def carregar_documentos_quarto(repository, token, diretorio):
                 f"Não foi possível decodificar o arquivo {arquivo['name']}."
             ) from erro
         html = incorporar_imagens(html, repository, headers, diretorio)
-        documentos.append((arquivo["name"], html))
+
+        nome_qmd = f"{Path(arquivo['name']).stem}.qmd"
+        arquivo_qmd = arquivos_por_nome.get(nome_qmd)
+        metadados = {}
+        if arquivo_qmd:
+            resposta_qmd = requests.get(
+                arquivo_qmd["url"], headers=headers, timeout=20
+            )
+            resposta_qmd.raise_for_status()
+            payload_qmd = resposta_qmd.json()
+            fonte_codificada = payload_qmd.get("content")
+            if payload_qmd.get("encoding") != "base64" or not isinstance(
+                fonte_codificada, str
+            ):
+                raise ValueError(
+                    "O GitHub não retornou o conteúdo Base64 esperado para "
+                    f"{nome_qmd}."
+                )
+            try:
+                fonte = base64.b64decode(
+                    "".join(fonte_codificada.split()), validate=True
+                ).decode("utf-8")
+            except (UnicodeDecodeError, ValueError) as erro:
+                raise ValueError(
+                    f"Não foi possível decodificar o arquivo {nome_qmd}."
+                ) from erro
+            metadados = extrair_metadados_qmd(fonte, nome_qmd)
+
+        extrator_texto = extrair_texto_html(html)
+        documentos.append(
+            (
+                arquivo["name"],
+                html,
+                metadados,
+                normalizar_texto(
+                    " ".join(
+                        (
+                            metadados.get("titulo", ""),
+                            metadados.get("categoria", ""),
+                            *metadados.get("tags", []),
+                            *metadados.get("reagentes", []),
+                            extrator_texto,
+                        )
+                    )
+                ),
+            )
+        )
     return documentos
 
 
@@ -710,72 +932,301 @@ if secao == "Procedimentos":
         st.error(str(erro))
         st.stop()
 
-    if not documentos:
+    try:
+        resposta_favoritos = buscar_favoritos_procedimentos()
+    except requests.RequestException:
+        st.error("Não foi possível carregar seus procedimentos favoritos.")
+        st.stop()
+    if resposta_favoritos.status_code != 200:
+        st.error(
+            "Não foi possível carregar seus favoritos: "
+            f"{extrair_erro_api(resposta_favoritos)}"
+        )
+        st.stop()
+    favoritos = set(resposta_favoritos.json())
+
+    procedimentos_formatados = []
+    for nome_arquivo, conteudo_html, metadados, texto_busca in documentos:
+        metadados = {
+            **metadados,
+            "texto_busca": texto_busca,
+        }
+        if not metadados.get("titulo"):
+            metadados["titulo"] = (
+                Path(nome_arquivo)
+                .stem.replace("-", " ")
+                .replace("_", " ")
+                .title()
+            )
+        procedimentos_formatados.append(
+            (nome_arquivo, conteudo_html, metadados)
+        )
+
+    procedimento_aberto = st.session_state.get("procedimento_aberto")
+    procedimento_selecionado = next(
+        (
+            procedimento
+            for procedimento in procedimentos_formatados
+            if procedimento[0] == procedimento_aberto
+        ),
+        None,
+    )
+
+    if procedimentos_formatados:
+        categorias = sorted(
+            {
+                procedimento[2]["categoria"]
+                for procedimento in procedimentos_formatados
+            }
+        )
+        tags_disponiveis = sorted(
+            {
+                tag
+                for procedimento in procedimentos_formatados
+                for tag in procedimento[2]["tags"]
+            }
+        )
+        busca_coluna, categoria_coluna, tags_coluna, revisao_coluna = (
+            st.columns([2, 1, 1.5, 1.5])
+        )
+        with busca_coluna:
+            pesquisa = normalizar_texto(
+                st.text_input(
+                    "Pesquisar em procedimentos",
+                    key="pesquisa_procedimentos_qmd",
+                ).strip()
+            )
+        with categoria_coluna:
+            categoria_selecionada = st.selectbox(
+                "Categoria",
+                ["Todas", *categorias],
+                key="categoria_procedimentos_qmd",
+            )
+        with tags_coluna:
+            tags_selecionadas = st.multiselect(
+                "Tags",
+                tags_disponiveis,
+                key="tags_procedimentos_qmd",
+            )
+        with revisao_coluna:
+            filtro_revisao = st.selectbox(
+                "Revisão",
+                [
+                    "Todas",
+                    "Em dia",
+                    "Próximas",
+                    "Atrasadas",
+                    "Sem data",
+                ],
+                key="revisao_procedimentos_qmd",
+            )
+        apenas_favoritos = st.checkbox(
+            "Mostrar apenas meus favoritos",
+            key="apenas_favoritos_procedimentos",
+        )
+
+        procedimentos_filtrados = []
+        for procedimento in procedimentos_formatados:
+            nome_arquivo, _, metadados = procedimento
+            if pesquisa and not all(
+                termo in metadados["texto_busca"]
+                for termo in pesquisa.split()
+            ):
+                continue
+            if (
+                categoria_selecionada != "Todas"
+                and metadados["categoria"] != categoria_selecionada
+            ):
+                continue
+            if tags_selecionadas and not set(tags_selecionadas).issubset(
+                metadados["tags"]
+            ):
+                continue
+            if apenas_favoritos and nome_arquivo not in favoritos:
+                continue
+
+            situacao_revisao = status_revisao_procedimento(metadados)
+            if (
+                filtro_revisao == "Sem data"
+                and situacao_revisao != "Sem data de revisão"
+            ):
+                continue
+            if filtro_revisao == "Atrasadas" and not situacao_revisao.startswith(
+                "Revisão atrasada"
+            ):
+                continue
+            if filtro_revisao == "Próximas" and not situacao_revisao.startswith(
+                "Revisão próxima"
+            ):
+                continue
+            if filtro_revisao == "Em dia" and not situacao_revisao.startswith(
+                "Próxima revisão"
+            ):
+                continue
+            procedimentos_filtrados.append(procedimento)
+
+    if procedimento_selecionado:
+        if st.button("← Voltar aos procedimentos"):
+            st.session_state.pop("procedimento_aberto", None)
+            st.rerun()
+        nome_arquivo, conteudo_html, metadados = procedimento_selecionado
+        st.subheader(metadados["titulo"])
+        detalhes_revisao = [
+            f"Versão {metadados['versao']}"
+            if metadados["versao"]
+            else "",
+            f"Revisor: {metadados['responsavel_revisao']}"
+            if metadados["responsavel_revisao"]
+            else "",
+            f"Revisado em {date.fromisoformat(metadados['data_revisao']).strftime('%d/%m/%Y')}"
+            if metadados["data_revisao"]
+            else "",
+            status_revisao_procedimento(metadados),
+        ]
+        st.caption(" · ".join(detalhe for detalhe in detalhes_revisao if detalhe))
+        if nome_arquivo in favoritos:
+            rotulo_favorito = "★ Remover dos favoritos"
+            favoritar = False
+        else:
+            rotulo_favorito = "☆ Adicionar aos favoritos"
+            favoritar = True
+        if st.button(rotulo_favorito, key=f"favorito_detalhe_{nome_arquivo}"):
+            try:
+                resposta_favorito = atualizar_favorito_procedimento(
+                    nome_arquivo, favoritar
+                )
+                if resposta_favorito.status_code == 200:
+                    st.rerun()
+                st.error(
+                    "Não foi possível atualizar o favorito: "
+                    f"{extrair_erro_api(resposta_favorito)}"
+                )
+            except requests.RequestException:
+                st.error("Não foi possível salvar seu favorito.")
+
+        if metadados["reagentes"]:
+            st.markdown("#### Reagentes vinculados ao estoque")
+            try:
+                resposta_lotes = buscar_lotes()
+            except requests.RequestException:
+                resposta_lotes = None
+                st.warning(
+                    "Não foi possível consultar o estoque para resolver os "
+                    "reagentes deste procedimento."
+                )
+            if resposta_lotes is not None:
+                if resposta_lotes.status_code == 200:
+                    lotes = resposta_lotes.json()
+                    for reagente in metadados["reagentes"]:
+                        lotes_reagente = [
+                            lote
+                            for lote in lotes
+                            if normalizar_texto(lote["nome_reagente"].strip())
+                            == normalizar_texto(reagente)
+                        ]
+                        st.markdown(f"**{reagente}**")
+                        if lotes_reagente:
+                            tabela_lotes = pd.DataFrame(
+                                [
+                                    {
+                                        "Lote": lote["numero_lote"],
+                                        "Fabricante": lote.get("fabricante", ""),
+                                        "Quantidade": lote["quantidade_atual"],
+                                        "Unidade": lote["unidade_medida"],
+                                        "Validade": pd.to_datetime(
+                                            lote["data_validade"]
+                                        ).strftime("%d/%m/%Y"),
+                                    }
+                                    for lote in lotes_reagente
+                                ]
+                            )
+                            st.dataframe(
+                                tabela_lotes,
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        else:
+                            st.caption(
+                                "Nenhum lote com esse nome foi encontrado "
+                                "no estoque atual."
+                            )
+                else:
+                    st.warning(
+                        "Não foi possível consultar o estoque: "
+                        f"{extrair_erro_api(resposta_lotes)}"
+                    )
+        st.html(conteudo_html)
+    elif not documentos:
         st.info(
             "Ainda não há procedimentos publicados. Adicione arquivos `.qmd` "
-            "à pasta `procedimentos` do repositório e publique o HTML."
+            "à pasta `procedimentos` do repositório; o GitHub renderizará "
+            "automaticamente o HTML."
         )
+    elif not procedimentos_filtrados:
+        st.info("Nenhum procedimento corresponde aos filtros selecionados.")
     else:
-        procedimentos_formatados = [
-            (
-                nome_arquivo,
-                html,
-                Path(nome_arquivo).stem.replace("-", " ").replace("_", " ").title(),
-            )
-            for nome_arquivo, html in documentos
-        ]
-        procedimento_aberto = st.session_state.get("procedimento_aberto")
-        procedimento_selecionado = next(
-            (
-                procedimento
-                for procedimento in procedimentos_formatados
-                if procedimento[0] == procedimento_aberto
-            ),
-            None,
+        st.caption(
+            f"{len(procedimentos_filtrados)} de "
+            f"{len(procedimentos_formatados)} procedimento(s)"
         )
-        if procedimento_selecionado:
-            if st.button("← Voltar aos procedimentos"):
-                st.session_state.pop("procedimento_aberto", None)
-                st.rerun()
-            _, html, titulo = procedimento_selecionado
-            st.subheader(titulo)
-            st.html(html)
-        else:
-            st.session_state.pop("procedimento_aberto", None)
-            pesquisa = st.text_input(
-                "Pesquisar procedimento",
-                key="pesquisa_procedimentos_qmd",
-            ).strip().casefold()
-            procedimentos_filtrados = [
-                procedimento
-                for procedimento in procedimentos_formatados
-                if not pesquisa or pesquisa in procedimento[2].casefold()
-            ]
-            if not procedimentos_filtrados:
-                st.info("Nenhum procedimento corresponde à sua pesquisa.")
-            else:
-                for inicio in range(0, len(procedimentos_filtrados), 2):
-                    colunas = st.columns(2)
-                    for coluna, procedimento in zip(
-                        colunas, procedimentos_filtrados[inicio : inicio + 2]
-                    ):
-                        nome_arquivo, _, titulo = procedimento
-                        with coluna:
-                            with st.container(border=True):
-                                st.caption("Procedimento do laboratório")
-                                st.subheader(titulo)
-                                st.write(
-                                    "Protocolo publicado em formato Quarto."
+        for inicio in range(0, len(procedimentos_filtrados), 2):
+            colunas = st.columns(2)
+            for coluna, procedimento in zip(
+                colunas, procedimentos_filtrados[inicio : inicio + 2]
+            ):
+                nome_arquivo, _, metadados = procedimento
+                with coluna:
+                    with st.container(border=True):
+                        st.caption(
+                            " · ".join(
+                                [
+                                    metadados["categoria"],
+                                    *metadados["tags"],
+                                ]
+                            )
+                        )
+                        st.subheader(metadados["titulo"])
+                        resumo_revisao = [
+                            f"v{metadados['versao']}"
+                            if metadados["versao"]
+                            else "",
+                            status_revisao_procedimento(metadados),
+                        ]
+                        st.write(" · ".join(resumo_revisao))
+                        abrir_coluna, favorito_coluna = st.columns([3, 2])
+                        with abrir_coluna:
+                            if st.button(
+                                "Ler procedimento",
+                                key=f"abrir_procedimento_{nome_arquivo}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["procedimento_aberto"] = (
+                                    nome_arquivo
                                 )
-                                if st.button(
-                                    "Ler procedimento",
-                                    key=f"abrir_procedimento_{nome_arquivo}",
-                                    use_container_width=True,
-                                ):
-                                    st.session_state["procedimento_aberto"] = (
-                                        nome_arquivo
+                                st.rerun()
+                        with favorito_coluna:
+                            esta_favorito = nome_arquivo in favoritos
+                            if st.button(
+                                "★ Favorito" if esta_favorito else "☆ Favoritar",
+                                key=f"favorito_procedimento_{nome_arquivo}",
+                                use_container_width=True,
+                            ):
+                                try:
+                                    resposta_favorito = (
+                                        atualizar_favorito_procedimento(
+                                            nome_arquivo, not esta_favorito
+                                        )
                                     )
-                                    st.rerun()
+                                    if resposta_favorito.status_code == 200:
+                                        st.rerun()
+                                    st.error(
+                                        "Não foi possível atualizar o favorito: "
+                                        f"{extrair_erro_api(resposta_favorito)}"
+                                    )
+                                except requests.RequestException:
+                                    st.error(
+                                        "Não foi possível salvar seu favorito."
+                                    )
     st.stop()
 
 
@@ -805,7 +1256,7 @@ if secao == "Caderno de reuniões":
         st.info("Ainda não há reuniões publicadas no caderno.")
     else:
         reunioes_formatadas = []
-        for nome_arquivo, html in reunioes:
+        for nome_arquivo, html, _, _ in reunioes:
             nome = Path(nome_arquivo).stem
             data_reuniao = None
             try:

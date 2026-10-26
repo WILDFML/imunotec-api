@@ -40,6 +40,13 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+class ProcedimentoFavoritoCreate(BaseModel):
+    arquivo: str = Field(
+        min_length=6, max_length=180, pattern=r"^[^/\\]+\.html$"
+    )
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
